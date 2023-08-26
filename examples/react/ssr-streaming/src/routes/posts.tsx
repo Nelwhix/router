@@ -1,33 +1,45 @@
 import * as React from 'react'
-import { FileRoute, Link, Outlet } from '@tanstack/react-router'
-import axios from 'axios'
-import { PostType } from './posts.$postId'
+import { Link, Outlet, Route } from '@tanstack/react-router'
+import { rootRoute } from './root'
+import { postIdRoute } from './posts/$postId'
+
+export type PostType = {
+  id: string
+  title: string
+  body: string
+}
+
+export type CommentType = {
+  id: string
+  postId: string
+  name: string
+  email: string
+  body: string
+}
 
 const fetchPosts = async () => {
   console.log('Fetching posts...')
   await new Promise((r) => setTimeout(r, 500))
-  return axios
-    .get<PostType[]>('https://jsonplaceholder.typicode.com/posts')
-    .then((r) => r.data.slice(0, 10))
+  return fetch('https://jsonplaceholder.typicode.com/posts')
+    .then((d) => d.json() as Promise<PostType[]>)
+    .then((d) => d.slice(0, 10))
 }
 
-// @ts-ignore
-export const route = new FileRoute('posts').createRoute({
+export const postsRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: 'posts',
   loader: fetchPosts,
-  component: ({ useLoader }) => {
+  component: function Posts({ useLoader }) {
     const posts = useLoader()
 
     return (
       <div className="p-2 flex gap-2">
         <ul className="list-disc pl-4">
-          {[
-            ...posts,
-            { id: 'i-do-not-exist', title: 'Non-existent Post' },
-          ]?.map((post) => {
+          {posts?.map((post) => {
             return (
               <li key={post.id} className="whitespace-nowrap">
                 <Link
-                  to="/posts/$postId"
+                  to={postIdRoute.to}
                   params={{
                     postId: post.id,
                   }}
