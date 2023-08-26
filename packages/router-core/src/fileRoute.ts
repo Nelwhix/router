@@ -1,9 +1,7 @@
-import { Last, ParsePathParams, Split } from './link'
+import { ParsePathParams } from './link'
 import {
   AnyRoute,
   ResolveFullPath,
-  ResolveId,
-  AnySearchSchema,
   ResolveFullSearchSchema,
   MergeParamsFromParent,
   RouteContext,
@@ -12,8 +10,11 @@ import {
   InferFullSearchSchema,
   UpdatableRouteOptions,
   Route,
+  AnyPathParams,
+  RootRouteId,
+  TrimPathLeft,
+  RouteConstraints,
 } from './route'
-import { DefaultRoutesInfo } from './routeInfo'
 
 export interface FileRoutesByPath {
   // '/': {
@@ -21,64 +22,102 @@ export interface FileRoutesByPath {
   // }
 }
 
-type Test = Last<Split<'/test/:id'>>
+type Replace<
+  S extends string,
+  From extends string,
+  To extends string,
+> = S extends `${infer Start}${From}${infer Rest}`
+  ? `${Start}${To}${Replace<Rest, From, To>}`
+  : S
+
+export type TrimLeft<
+  T extends string,
+  S extends string,
+> = T extends `${S}${infer U}` ? U : T
+
+export type TrimRight<
+  T extends string,
+  S extends string,
+> = T extends `${infer U}${S}` ? U : T
+
+export type Trim<T extends string, S extends string> = TrimLeft<
+  TrimRight<T, S>,
+  S
+>
+
+export type RemoveUnderScores<T extends string> = Replace<
+  Replace<TrimRight<TrimLeft<T, '/_'>, '_'>, '_/', '/'>,
+  '/_',
+  '/'
+>
+
+export type ResolveFilePath<
+  TParentRoute extends AnyRoute,
+  TFilePath extends string,
+> = TParentRoute['id'] extends RootRouteId
+  ? TrimPathLeft<TFilePath>
+  : Replace<
+      TrimPathLeft<TFilePath>,
+      TrimPathLeft<TParentRoute['types']['customId']>,
+      ''
+    >
+
+export type FileRoutePath<
+  TParentRoute extends AnyRoute,
+  TFilePath extends string,
+> = ResolveFilePath<TParentRoute, TFilePath> extends `_${infer _}`
+  ? string
+  : ResolveFilePath<TParentRoute, TFilePath>
 
 export class FileRoute<
   TFilePath extends keyof FileRoutesByPath,
   TParentRoute extends AnyRoute = FileRoutesByPath[TFilePath]['parentRoute'],
-  TPath extends string = Last<Split<TFilePath>>,
-  TCustomId extends string = TPath extends `_${infer T}` ? T : string,
+  TId extends RouteConstraints['TId'] = TFilePath,
+  TPath extends RouteConstraints['TPath'] = FileRoutePath<
+    TParentRoute,
+    TFilePath
+  >,
+  TFullPath extends RouteConstraints['TFullPath'] = ResolveFullPath<
+    TParentRoute,
+    RemoveUnderScores<TPath>
+  >,
 > {
   constructor(public path: TFilePath) {}
 
   createRoute = <
-    TFullPath extends ResolveFullPath<TParentRoute, TPath> = ResolveFullPath<
-      TParentRoute,
-      TPath
-    >,
-    TId extends ResolveId<TParentRoute, TCustomId, TPath> = ResolveId<
-      TParentRoute,
-      TCustomId,
-      TPath
-    >,
     TLoader = unknown,
-    TSearchSchema extends AnySearchSchema = {},
-    TFullSearchSchema extends AnySearchSchema = ResolveFullSearchSchema<
+    TSearchSchema extends RouteConstraints['TSearchSchema'] = {},
+    TFullSearchSchema extends RouteConstraints['TFullSearchSchema'] = ResolveFullSearchSchema<
       TParentRoute,
       TSearchSchema
     >,
-    TParams extends Record<ParsePathParams<TPath>, any> = Record<
-      ParsePathParams<TPath>,
-      string
-    >,
-    TAllParams extends MergeParamsFromParent<
-      TParentRoute['__types']['allParams'],
+    TParams extends RouteConstraints['TParams'] = ParsePathParams<TPath> extends never
+      ? AnyPathParams
+      : Record<ParsePathParams<TPath>, RouteConstraints['TPath']>,
+    TAllParams extends RouteConstraints['TAllParams'] = MergeParamsFromParent<
+      TParentRoute['types']['allParams'],
       TParams
-    > = MergeParamsFromParent<TParentRoute['__types']['allParams'], TParams>,
-    TParentContext extends TParentRoute['__types']['routeContext'] = TParentRoute['__types']['routeContext'],
-    TAllParentContext extends TParentRoute['__types']['context'] = TParentRoute['__types']['context'],
-    TRouteContext extends RouteContext = RouteContext,
-    TContext extends MergeParamsFromParent<
-      TParentRoute['__types']['context'],
-      TRouteContext
-    > = MergeParamsFromParent<
-      TParentRoute['__types']['context'],
+    >,
+    TParentContext extends RouteConstraints['TParentContext'] = TParentRoute['types']['routeContext'],
+    TAllParentContext extends RouteConstraints['TId'] = TParentRoute['types']['context'],
+    TRouteContext extends RouteConstraints['TRouteContext'] = RouteContext,
+    TContext extends RouteConstraints['TAllContext'] = MergeParamsFromParent<
+      TParentRoute['types']['context'],
       TRouteContext
     >,
-    TRouterContext extends AnyContext = AnyContext,
-    TChildren extends unknown = unknown,
-    TRoutesInfo extends DefaultRoutesInfo = DefaultRoutesInfo,
+    TRouterContext extends RouteConstraints['TRouterContext'] = AnyContext,
+    TChildren extends RouteConstraints['TChildren'] = unknown,
+    TRouteTree extends RouteConstraints['TRouteTree'] = AnyRoute,
   >(
     options: Omit<
       RouteOptions<
         TParentRoute,
-        TCustomId,
-        TPath,
+        string,
+        string,
         TLoader,
         InferFullSearchSchema<TParentRoute>,
         TSearchSchema,
         TFullSearchSchema,
-        TParentRoute['__types']['allParams'],
         TParams,
         TAllParams,
         TParentContext,
@@ -100,7 +139,7 @@ export class FileRoute<
     TParentRoute,
     TPath,
     TFullPath,
-    TCustomId,
+    TFilePath,
     TId,
     TLoader,
     TSearchSchema,
@@ -113,7 +152,7 @@ export class FileRoute<
     TContext,
     TRouterContext,
     TChildren,
-    TRoutesInfo
+    TRouteTree
   > => {
     const route = new Route(options as any)
     ;(route as any).isRoot = false
