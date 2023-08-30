@@ -119,6 +119,20 @@ export const packages: Package[] = [
     ],
   },
   {
+    name: '@tanstack/vue-router',
+    packageDir: 'vue-router',
+    srcDir: 'src',
+    builds: [
+      {
+        jsName: 'VueRouter',
+        entryFile: 'src/index.tsx',
+        globals: {
+          vue: 'Vue',
+        },
+      },
+    ],
+  },
+  {
     name: '@tanstack/router-devtools',
     packageDir: 'router-devtools',
     srcDir: 'src',

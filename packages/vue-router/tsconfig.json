@@ -1,9 +1,11 @@
 {
+    "composite": true,
+    "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "preserve",
     "outDir": "./build/types",
     "jsxImportSource": "vue"
   },
-  "files": ["src/index.tsx"],
+  "files": ["src/vue.tsx"],
   "include": ["src"]
 }
