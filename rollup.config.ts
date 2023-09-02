@@ -114,6 +114,11 @@ function esm({ input, packageDir, external, banner }: Options): RollupOptions {
     },
 
     plugins: [
+        dts({
+            compilerOptions: {
+              preserveSymlinks: false,
+            },
+          }),
       // svelte({
       //   compilerOptions: {
       //     hydratable: true,

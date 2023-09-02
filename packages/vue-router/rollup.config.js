@@ -1,6 +1,6 @@
 require('ts-node').register({
     compilerOptions: {
-      esModuleInterop: true,
+        esModuleInterop: true,
     },
   })
   

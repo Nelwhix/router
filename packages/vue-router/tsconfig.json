@@ -7,5 +7,5 @@
     "jsxImportSource": "vue"
   },
   "files": ["src/vue.tsx"],
-  "include": ["src"]
+  "include": ["src"],
 }
