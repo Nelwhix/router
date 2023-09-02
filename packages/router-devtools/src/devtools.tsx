@@ -461,7 +461,7 @@ function RouteComp({
               fontWeight: 'bold',
               borderRadius: '100%',
               transition: 'all .2s ease-out',
-              background: getRouteStatusColor(matches, route, theme, router),
+              background: getRouteStatusColor(matches, route, theme),
               opacity: match ? 1 : 0.3,
             }}
           />
@@ -563,13 +563,13 @@ export const TanStackRouterDevtoolsPanel = React.forwardRef<
     },
   )
 
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      router.cleanMatches()
-    }, 1000)
+  // React.useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     router.cleanMatches()
+  //   }, 1000)
 
-    return () => clearInterval(interval)
-  }, [router])
+  //   return () => clearInterval(interval)
+  // }, [router])
 
   return (
     <ThemeProvider theme={theme}>
@@ -798,7 +798,7 @@ export const TanStackRouterDevtoolsPanel = React.forwardRef<
                           width: '1.3rem',
                           height: '1.3rem',
                           marginLeft: '.25rem',
-                          background: getStatusColor(match, theme, router),
+                          background: getStatusColor(match, theme),
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
@@ -871,7 +871,7 @@ export const TanStackRouterDevtoolsPanel = React.forwardRef<
                         width: '1.3rem',
                         height: '1.3rem',
                         marginLeft: '.25rem',
-                        background: getStatusColor(match, theme, router),
+                        background: getStatusColor(match, theme),
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontWeight: 'bold',
