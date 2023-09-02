@@ -20,7 +20,6 @@ export type RouteNode = {
   isRoot?: boolean
   children?: RouteNode[]
   parent?: RouteNode
-  layoutLimit?: string
 }
 
 async function getRouteNodes(config: Config) {
@@ -33,7 +32,10 @@ async function getRouteNodes(config: Config) {
     let dirList = await fs.readdir(fullDir)
 
     dirList = dirList.filter((d) => {
-      if (d.startsWith('.') || d.startsWith(routeFileIgnorePrefix)) {
+      if (
+        d.startsWith('.') ||
+        (routeFileIgnorePrefix && d.startsWith(routeFileIgnorePrefix))
+      ) {
         return false
       }
 
@@ -237,9 +239,6 @@ export async function generator(config: Config) {
           `getParentRoute: () => ${
             routeNode.parent?.variableName ?? 'root'
           }Route`,
-          routeNode.layoutLimit
-            ? `layoutLimit: '${routeNode.layoutLimit}'`
-            : '',
           // `\n// ${JSON.stringify(
           //   {
           //     ...routeNode,

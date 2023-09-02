@@ -1,4 +1,4 @@
-import { Store } from '@tanstack/react-store'
+import { Store } from '@tanstack/store'
 import invariant from 'tiny-invariant'
 
 //
@@ -37,6 +37,7 @@ import {
   FullSearchSchema,
   RouteById,
   RoutePaths,
+  RouteIds,
 } from './routeInfo'
 import { defaultParseSearch, defaultStringifySearch } from './searchParams'
 import {
@@ -108,13 +109,13 @@ export type HydrationCtx = {
 
 export interface RouteMatch<
   TRouteTree extends AnyRoute = AnyRoute,
-  TRoute extends AnyRoute = AnyRoute,
+  TRouteId extends RouteIds<TRouteTree> = ParseRoute<TRouteTree>['id'],
 > {
   id: string
   key?: string
-  routeId: string
+  routeId: TRouteId
   pathname: string
-  params: TRoute['types']['allParams']
+  params: RouteById<TRouteTree, TRouteId>['types']['allParams']
   status: 'pending' | 'success' | 'error'
   isFetching: boolean
   invalid: boolean
@@ -122,20 +123,21 @@ export interface RouteMatch<
   paramsError: unknown
   searchError: unknown
   updatedAt: number
-  invalidAt: number
-  preloadInvalidAt: number
-  loaderData: TRoute['types']['loader']
+  maxAge: number
+  preloadMaxAge: number
+  loaderData: RouteById<TRouteTree, TRouteId>['types']['loader']
   loadPromise?: Promise<void>
   __resolveLoadPromise?: () => void
-  routeContext: TRoute['types']['routeContext']
-  context: TRoute['types']['context']
-  routeSearch: TRoute['types']['searchSchema']
-  search: FullSearchSchema<TRouteTree> & TRoute['types']['fullSearchSchema']
+  routeContext: RouteById<TRouteTree, TRouteId>['types']['routeContext']
+  context: RouteById<TRouteTree, TRouteId>['types']['context']
+  routeSearch: RouteById<TRouteTree, TRouteId>['types']['searchSchema']
+  search: FullSearchSchema<TRouteTree> &
+    RouteById<TRouteTree, TRouteId>['types']['fullSearchSchema']
   fetchedAt: number
   abortController: AbortController
 }
 
-export type AnyRouteMatch = RouteMatch<AnyRoute, AnyRoute>
+export type AnyRouteMatch = RouteMatch<any>
 
 export type RouterContextOptions<TRouteTree extends AnyRoute> =
   AnyContext extends TRouteTree['types']['routerContext']
@@ -155,6 +157,7 @@ export interface RouterOptions<
   parseSearch?: SearchParser
   defaultPreload?: false | 'intent'
   defaultPreloadDelay?: number
+  refetchOnWindowFocus?: boolean
   defaultComponent?: RegisteredRouteComponent<
     unknown,
     AnySearchSchema,
@@ -196,11 +199,11 @@ export interface RouterState<
 > {
   status: 'idle' | 'pending'
   isFetching: boolean
-  matchesById: Record<string, RouteMatch<TRouteTree, ParseRoute<TRouteTree>>>
+  matchesById: Record<string, RouteMatch<TRouteTree>>
   matchIds: string[]
   pendingMatchIds: string[]
-  matches: RouteMatch<TRouteTree, ParseRoute<TRouteTree>>[]
-  pendingMatches: RouteMatch<TRouteTree, ParseRoute<TRouteTree>>[]
+  matches: RouteMatch<TRouteTree>[]
+  pendingMatches: RouteMatch<TRouteTree>[]
   location: ParsedLocation<FullSearchSchema<TRouteTree>>
   resolvedLocation: ParsedLocation<FullSearchSchema<TRouteTree>>
   lastUpdated: number
@@ -247,7 +250,8 @@ export type DehydratedRouteMatch = Pick<
   RouteMatch,
   | 'fetchedAt'
   | 'invalid'
-  | 'invalidAt'
+  | 'maxAge'
+  | 'preloadMaxAge'
   | 'id'
   | 'loaderData'
   | 'status'
@@ -292,6 +296,9 @@ export type RouterListener<TRouterEvent extends RouterEvent> = {
   fn: ListenerFn<TRouterEvent>
 }
 
+const visibilityChangeEvent = 'visibilitychange'
+const focusEvent = 'focus'
+
 export class Router<
   TRouteTree extends AnyRoute = AnyRoute,
   TDehydrated extends Record<string, any> = Record<string, any>,
@@ -318,6 +325,7 @@ export class Router<
   __store: Store<RouterState<TRouteTree>>
   state: RouterState<TRouteTree>
   dehydratedData?: TDehydrated
+  resetNextScroll = false
 
   constructor(options: RouterConstructorOptions<TRouteTree, TDehydrated>) {
     this.options = {
@@ -417,10 +425,28 @@ export class Router<
   }
 
   mount = () => {
-    // If the router matches are empty, start loading the matches
-    // if (!this.state.matches.length) {
+    // addEventListener does not exist in React Native, but window does
+    // In the future, we might need to invert control here for more adapters
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener(visibilityChangeEvent, this.#onFocus, false)
+      window.addEventListener(focusEvent, this.#onFocus, false)
+    }
+
     this.safeLoad()
-    // }
+
+    return () => {
+      if (typeof window !== 'undefined' && window.removeEventListener) {
+        window.removeEventListener(visibilityChangeEvent, this.#onFocus)
+        window.removeEventListener(focusEvent, this.#onFocus)
+      }
+    }
+  }
+
+  #onFocus = () => {
+    if (this.options.refetchOnWindowFocus ?? true) {
+      this.invalidate()
+    }
   }
 
   update = (opts?: RouterOptions<any, any>): this => {
@@ -522,7 +548,6 @@ export class Router<
       }
 
       // Cancel any pending matches
-      // this.cancelMatches()
 
       let pendingMatches!: RouteMatch<any, any>[]
 
@@ -574,6 +599,18 @@ export class Router<
           return latestPromise
         }
 
+        const exitingMatchIds = this.state.matchIds.filter(
+          (id) => !this.state.pendingMatchIds.includes(id),
+        )
+
+        const enteringMatchIds = this.state.pendingMatchIds.filter(
+          (id) => !this.state.matchIds.includes(id),
+        )
+
+        const stayingMatchIds = this.state.matchIds.filter((id) =>
+          this.state.pendingMatchIds.includes(id),
+        )
+
         this.__store.setState((s) => ({
           ...s,
           status: 'idle',
@@ -581,6 +618,19 @@ export class Router<
           matchIds: s.pendingMatchIds,
           pendingMatchIds: [],
         }))
+        ;(
+          [
+            [exitingMatchIds, 'onLeave'],
+            [enteringMatchIds, 'onEnter'],
+            [stayingMatchIds, 'onTransition'],
+          ] as const
+        ).forEach(([matchIds, hook]) => {
+          matchIds.forEach((id) => {
+            const match = this.getRouteMatch(id)!
+            const route = this.getRoute(match.routeId)
+            route.options[hook]?.(match)
+          })
+        })
 
         this.#emit({
           type: 'onLoad',
@@ -602,16 +652,17 @@ export class Router<
 
     this.latestLoadPromise = promise
 
+    this.latestLoadPromise.then(() => {
+      this.cleanMatches()
+    })
+
     return this.latestLoadPromise
   }
 
   #mergeMatches = (
-    prevMatchesById: Record<
-      string,
-      RouteMatch<TRouteTree, ParseRoute<TRouteTree>>
-    >,
+    prevMatchesById: Record<string, RouteMatch<TRouteTree>>,
     nextMatches: AnyRouteMatch[],
-  ): Record<string, RouteMatch<TRouteTree, ParseRoute<TRouteTree>>> => {
+  ): Record<string, RouteMatch<TRouteTree>> => {
     const nextMatchesById: any = {
       ...prevMatchesById,
     }
@@ -671,10 +722,13 @@ export class Router<
     const outdatedMatchIds = Object.values(this.state.matchesById)
       .filter((match) => {
         const route = this.getRoute(match.routeId)
+
         return (
           !this.state.matchIds.includes(match.id) &&
           !this.state.pendingMatchIds.includes(match.id) &&
-          match.preloadInvalidAt < now &&
+          (match.preloadMaxAge > -1
+            ? match.updatedAt + match.preloadMaxAge < now
+            : true) &&
           (route.options.gcMaxAge
             ? match.updatedAt + route.options.gcMaxAge < now
             : true)
@@ -700,7 +754,7 @@ export class Router<
     pathname: string,
     locationSearch: AnySearchSchema,
     opts?: { throwOnError?: boolean; debug?: boolean },
-  ): RouteMatch<TRouteTree, ParseRoute<TRouteTree>>[] => {
+  ): RouteMatch<TRouteTree>[] => {
     let routeParams: AnyPathParams = {}
 
     let foundRoute = this.flatRoutes.find((route) => {
@@ -795,8 +849,8 @@ export class Router<
         params: routeParams,
         pathname: joinPaths([this.basepath, interpolatedPath]),
         updatedAt: Date.now(),
-        invalidAt: Infinity,
-        preloadInvalidAt: Infinity,
+        maxAge: -1,
+        preloadMaxAge: -1,
         routeSearch: {},
         search: {} as any,
         status: hasLoaders ? 'pending' : 'success',
@@ -860,52 +914,24 @@ export class Router<
         }
       })()
 
-      Object.assign(match, {
-        ...searchInfo,
-      })
-
-      const contextInfo = (() => {
-        try {
-          const routeContext =
-            route.options.getContext?.({
-              parentContext: parentMatch?.routeContext ?? {},
-              context: parentMatch?.context ?? this?.options.context ?? {},
-              params: match.params,
-              search: match.search,
-            }) || ({} as any)
-
-          const context = {
-            ...(parentMatch?.context ?? this?.options.context),
-            ...routeContext,
-          } as any
-
-          return {
-            context,
-            routeContext,
-          }
-        } catch (err) {
-          route.options.onError?.(err)
-          throw err
-        }
-      })()
-
-      Object.assign(match, {
-        ...contextInfo,
-      })
+      Object.assign(match, searchInfo)
     })
 
     return matches as any
   }
 
   loadMatches = async (
-    resolvedMatches: AnyRouteMatch[],
+    _resolvedMatches: AnyRouteMatch[],
     opts?: {
       preload?: boolean
       maxAge?: number
     },
   ) => {
+    const getFreshMatches = () =>
+      _resolvedMatches.map((d) => this.getRouteMatch(d.id)!)
+
     if (!opts?.preload) {
-      resolvedMatches.forEach((match) => {
+      getFreshMatches().forEach((match) => {
         // Update each match with its latest route data
         this.setRouteMatch(match.id, (s) => ({
           ...s,
@@ -917,18 +943,17 @@ export class Router<
           paramsError: match.paramsError,
           searchError: match.searchError,
           params: match.params,
-          preloadInvalidAt: 0,
+          preloadMaxAge: 0,
         }))
       })
     }
-
-    this.cleanMatches()
 
     let firstBadMatchIndex: number | undefined
 
     // Check each match middleware to see if the route can be accessed
     try {
-      for (const [index, match] of resolvedMatches.entries()) {
+      for (const [index, match] of getFreshMatches().entries()) {
+        const parentMatch = getFreshMatches()[index - 1]
         const route = this.getRoute(match.routeId)
 
         const handleError = (err: any, code: string) => {
@@ -968,10 +993,24 @@ export class Router<
         let didError = false
 
         try {
-          await route.options.beforeLoad?.({
-            ...match,
-            preload: !!opts?.preload,
-          })
+          const routeContext =
+            (await route.options.beforeLoad?.({
+              ...match,
+              preload: !!opts?.preload,
+              parentContext: parentMatch?.routeContext ?? {},
+              context: parentMatch?.context ?? this?.options.context ?? {},
+            })) ?? ({} as any)
+
+          const context = {
+            ...(parentMatch?.context ?? this?.options.context),
+            ...routeContext,
+          } as any
+
+          this.setRouteMatch(match.id, (s) => ({
+            ...s,
+            context,
+            routeContext,
+          }))
         } catch (err) {
           handleError(err, 'BEFORE_LOAD')
           didError = true
@@ -990,7 +1029,7 @@ export class Router<
       throw err
     }
 
-    const validResolvedMatches = resolvedMatches.slice(0, firstBadMatchIndex)
+    const validResolvedMatches = getFreshMatches().slice(0, firstBadMatchIndex)
     const matchPromises: Promise<any>[] = []
 
     validResolvedMatches.forEach((match, index) => {
@@ -1002,7 +1041,9 @@ export class Router<
           if (
             match.isFetching ||
             (match.status === 'success' &&
-              !this.getIsInvalid({ matchId: match.id, preload: opts?.preload }))
+              !isMatchInvalid(match, {
+                preload: opts?.preload,
+              }))
           ) {
             return this.getRouteMatch(match.id)?.loadPromise
           }
@@ -1098,16 +1139,6 @@ export class Router<
     })
 
     await Promise.all(matchPromises)
-
-    this.cleanMatches()
-  }
-
-  reload = () => {
-    return this.navigate({
-      fromCurrent: true,
-      replace: true,
-      search: true,
-    } as any)
   }
 
   resolvePath = (from: string, path: string) => {
@@ -1124,6 +1155,7 @@ export class Router<
     hash,
     replace,
     params,
+    resetScroll,
   }: NavigateOptions<TRouteTree, TFrom, TTo>) => {
     // If this link simply reloads the current route,
     // make sure it has a new key so it will trigger a data refresh
@@ -1151,6 +1183,7 @@ export class Router<
       hash,
       replace,
       params,
+      resetScroll,
     })
   }
 
@@ -1214,6 +1247,7 @@ export class Router<
     preloadDelay: userPreloadDelay,
     disabled,
     state,
+    resetScroll,
   }: LinkOptions<TRouteTree, TFrom, TTo>): LinkInfo => {
     // If this link simply reloads the current route,
     // make sure it has a new key so it will trigger a data refresh
@@ -1237,6 +1271,7 @@ export class Router<
       hash,
       replace,
       state,
+      resetScroll,
     }
 
     const next = this.buildNext(nextOpts)
@@ -1346,7 +1381,8 @@ export class Router<
           pick(d, [
             'fetchedAt',
             'invalid',
-            'invalidAt',
+            'preloadMaxAge',
+            'maxAge',
             'id',
             'loaderData',
             'status',
@@ -1676,7 +1712,7 @@ export class Router<
   }
 
   #commitLocation = async (
-    location: BuildNextOptions & { replace?: boolean },
+    location: BuildNextOptions & { replace?: boolean; resetScroll?: boolean },
   ) => {
     const next = this.buildNext(location)
     const id = '' + Date.now() + Math.random()
@@ -1704,20 +1740,18 @@ export class Router<
       ...next.state,
     })
 
+    this.resetNextScroll = location.resetScroll ?? true
+
     return this.latestLoadPromise
   }
 
-  getRouteMatch = (
-    id: string,
-  ): undefined | RouteMatch<TRouteTree, AnyRoute> => {
+  getRouteMatch = (id: string): undefined | RouteMatch<TRouteTree> => {
     return this.state.matchesById[id]
   }
 
   setRouteMatch = (
     id: string,
-    updater: (
-      prev: RouteMatch<TRouteTree, AnyRoute>,
-    ) => RouteMatch<TRouteTree, AnyRoute>,
+    updater: (prev: RouteMatch<TRouteTree>) => RouteMatch<TRouteTree>,
   ) => {
     this.__store.setState((prev) => {
       if (!prev.matchesById[id]) {
@@ -1749,29 +1783,24 @@ export class Router<
     const route = this.getRoute(match.routeId)
     const updatedAt = opts?.updatedAt ?? Date.now()
 
-    const preloadInvalidAt =
-      updatedAt +
-      (opts?.maxAge ??
-        route.options.preloadMaxAge ??
-        this.options.defaultPreloadMaxAge ??
-        5000)
+    const preloadMaxAge =
+      opts?.maxAge ??
+      route.options.preloadMaxAge ??
+      this.options.defaultPreloadMaxAge ??
+      5000
 
-    const invalidAt =
-      updatedAt +
-      (opts?.maxAge ??
-        route.options.maxAge ??
-        this.options.defaultMaxAge ??
-        Infinity)
+    const maxAge =
+      opts?.maxAge ?? route.options.maxAge ?? this.options.defaultMaxAge ?? -1
 
     this.setRouteMatch(id, (s) => ({
       ...s,
       error: undefined,
       status: 'success',
       isFetching: false,
-      updatedAt: Date.now(),
+      updatedAt: updatedAt,
       loaderData: functionalUpdate(updater, s.loaderData),
-      preloadInvalidAt,
-      invalidAt,
+      preloadMaxAge,
+      maxAge,
     }))
   }
 
@@ -1804,29 +1833,12 @@ export class Router<
     }
 
     if (opts?.reload ?? true) {
-      return this.reload()
+      return this.navigate({
+        fromCurrent: true,
+        replace: true,
+        search: true,
+      } as any)
     }
-  }
-
-  getIsInvalid = (opts?: { matchId: string; preload?: boolean }): boolean => {
-    if (!opts?.matchId) {
-      return !!this.state.matches.find((d) =>
-        this.getIsInvalid({ matchId: d.id, preload: opts?.preload }),
-      )
-    }
-
-    const match = this.getRouteMatch(opts?.matchId)
-
-    if (!match) {
-      return false
-    }
-
-    const now = Date.now()
-
-    return (
-      match.invalid ||
-      (opts?.preload ? match.preloadInvalidAt : match.invalidAt) < now
-    )
   }
 }
 
@@ -1896,4 +1908,23 @@ export function lazyFn<
     const imported = await fn()
     return imported[key || 'default'](...args)
   }
+}
+
+export function isMatchInvalid(
+  match: AnyRouteMatch,
+  opts?: { preload?: boolean },
+) {
+  const now = Date.now()
+
+  if (match.invalid) {
+    return true
+  }
+
+  if (opts?.preload) {
+    return match.preloadMaxAge < 0
+      ? false
+      : match.updatedAt + match.preloadMaxAge < now
+  }
+
+  return match.maxAge < 0 ? false : match.updatedAt + match.maxAge < now
 }

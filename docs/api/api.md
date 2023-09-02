@@ -73,9 +73,6 @@ const myRoute = new Route({
   parseParams: (rawParams: Record<string, string>) => Record<string, TParams>,
   // A function to stringify the path parameters for the route back to the URL
   stringifyParams: (params: Record<string, TParams>) => Record<string, string>,
-  // A function that returns the context for the route. This context will be merged with parent context and be made available to this route and its children
-  getContext: (ctx: { params: TAllParams; search: TFullSearchSchema }) =>
-    Record<string, TContext>,
   //
   //
   // 🧠: The following options can be set in both the constructor AND via the Route.update method.
@@ -134,6 +131,7 @@ const myRoute = new Route({
   // calls that match this route.
   postSearchFilters?: ((search: TFullSearchSchema) => TFullSearchSchema)[]
   // A function that will run before a route is loaded. If you throw a redirect from this function during a navigation, the location will be updated. If you throw any other error, the route will not be loaded (even preloaded)
+  // If you choose to return an object, it will be assigned to this route's `routeContext` value and be merged onto the router's `context` value.
   beforeLoad?: (
     opts: {
       // The parsed path parameters available from this route and its parents.
@@ -148,26 +146,17 @@ const myRoute = new Route({
       preload: boolean
       // The context for this route only.
       routeContext: TContext
-      // The merged context for this route and its parents.
+      // The merged context for thi,bs route and its parents.
       context: TAllContext
-    }
-  ) => Promise<void> | void
+    // TContext extends Record<string, any>
+    Promise<TContext> | TContext
+  // If an error is encountered in any of the lifecycle methods, this function will be called with the error.
   onError?: (err: any) => void
-  // This function is called
-  // when moving from an inactive state to an active one. Likewise, when moving from
-  // an active to an inactive state, the return function (if provided) is called.
-  onLoaded?: (matchContext: {
-    params: TAllParams
-    search: TFullSearchSchema
-  }) =>
-    | void
-    | undefined
-    | ((match: { params: TAllParams; search: TFullSearchSchema }) => void)
-  // This function is called when the route remains active from one transition to the next.
-  onTransition?: (match: {
-    params: TAllParams
-    search: TFullSearchSchema
-  }) => void
+  // These functions are called as route matches are loaded, stick around and leave the active
+  // matches
+  onEnter?: (match: AnyRouteMatch) => void
+  onTransition?: (match: AnyRouteMatch) => void
+  onLeave?: (match: AnyRouteMatch) => void
 })
 ```
 

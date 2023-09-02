@@ -1,5 +1,11 @@
 import { ParsePathParams } from './link'
-import { AnyRouter, Router, RouteMatch, RegisteredRouter } from './router'
+import {
+  AnyRouter,
+  Router,
+  RouteMatch,
+  RegisteredRouter,
+  AnyRouteMatch,
+} from './router'
 import { IsAny, NoInfer, PickRequired, UnionToIntersection } from './utils'
 import invariant from 'tiny-invariant'
 import { joinPaths, trimPath } from './path'
@@ -185,46 +191,6 @@ export type MetaOptions = keyof PickRequired<RouteMeta> extends never
     }
 
 export type AnyRouteProps = RegisteredRouteProps<any, any, any, any, any>
-export type ComponentPropsFromRoute<TRoute> = TRoute extends Route<
-  infer TParentRoute,
-  infer TPath,
-  infer TFullPath,
-  infer TCustomId,
-  infer TId,
-  infer TLoader,
-  infer TSearchSchema,
-  infer TFullSearchSchema,
-  infer TParams,
-  infer TAllParams,
-  infer TParentContext,
-  infer TAllParentContext,
-  infer TRouteContext,
-  infer TContext,
-  infer TRouterContext,
-  infer TChildren,
-  infer TRouteTree
->
-  ? RegisteredRouteProps<
-      TLoader,
-      TFullSearchSchema,
-      TAllParams,
-      TRouteContext,
-      TContext
-    >
-  : never
-
-export type ComponentFromRoute<TRoute> = RegisteredRouteComponent<
-  ComponentPropsFromRoute<TRoute>
->
-
-export type RouteLoaderFromRoute<TRoute extends AnyRoute> = LoaderFn<
-  TRoute['types']['loader'],
-  TRoute['types']['searchSchema'],
-  TRoute['types']['fullSearchSchema'],
-  TRoute['types']['allParams'],
-  TRoute['types']['routeContext'],
-  TRoute['types']['context']
->
 
 export type RouteOptions<
   TParentRoute extends AnyRoute = AnyRoute,
@@ -288,7 +254,6 @@ export type BaseRouteOptions<
   TRouteContext extends RouteContext = RouteContext,
   TAllContext extends AnyContext = AnyContext,
 > = RoutePathOptions<TCustomId, TPath> & {
-  layoutLimit?: string
   getParentRoute: () => TParentRoute
   validateSearch?: SearchSchemaValidator<TSearchSchema>
   loader?: LoaderFn<
@@ -299,7 +264,34 @@ export type BaseRouteOptions<
     NoInfer<TRouteContext>,
     TAllContext
   >
-} & ([TLoader] extends [never]
+} & (keyof PickRequired<RouteContext> extends never
+    ? // This async function is called before a route is loaded.
+      // If an error is thrown here, the route's loader will not be called.
+      // If thrown during a navigation, the navigation will be cancelled and the error will be passed to the `onError` function.
+      // If thrown during a preload event, the error will be logged to the console.
+      {
+        beforeLoad?: BeforeLoadFn<
+          TParentRoute,
+          TAllParams,
+          TSearchSchema,
+          TFullSearchSchema,
+          TParentContext,
+          TAllParentContext,
+          TRouteContext
+        >
+      }
+    : {
+        beforeLoad: BeforeLoadFn<
+          TParentRoute,
+          TAllParams,
+          TSearchSchema,
+          TFullSearchSchema,
+          TParentContext,
+          TAllParentContext,
+          TRouteContext
+        >
+      }) &
+  ([TLoader] extends [never]
     ? {
         loader: 'Loaders must return a type other than never. If you are throwing a redirect() and not returning anything, return a redirect() instead.'
       }
@@ -320,32 +312,12 @@ export type BaseRouteOptions<
         stringifyParams?: never
         parseParams?: never
       }
-  ) &
-  (keyof PickRequired<RouteContext> extends never
-    ? {
-        getContext?: GetContextFn<
-          TParentRoute,
-          TAllParams,
-          TFullSearchSchema,
-          TParentContext,
-          TAllParentContext,
-          TRouteContext
-        >
-      }
-    : {
-        getContext: GetContextFn<
-          TParentRoute,
-          TAllParams,
-          TFullSearchSchema,
-          TParentContext,
-          TAllParentContext,
-          TRouteContext
-        >
-      })
+  )
 
-type GetContextFn<
+type BeforeLoadFn<
   TParentRoute,
   TAllParams,
+  TSearchSchema,
   TFullSearchSchema,
   TParentContext,
   TAllParentContext,
@@ -353,7 +325,10 @@ type GetContextFn<
 > = (
   opts: {
     params: TAllParams
+    routeSearch: TSearchSchema
     search: TFullSearchSchema
+    abortController: AbortController
+    preload: boolean
   } & (TParentRoute extends undefined
     ? {
         context?: TAllParentContext
@@ -363,7 +338,7 @@ type GetContextFn<
         context: TAllParentContext
         parentContext: TParentContext
       }),
-) => TRouteContext
+) => Promise<TRouteContext> | TRouteContext | void
 
 export type UpdatableRouteOptions<
   TLoader,
@@ -412,35 +387,12 @@ export type UpdatableRouteOptions<
   maxAge?: number
   // If set, a match of this route that becomes inactive (or unused) will be garbage collected after this many milliseconds
   gcMaxAge?: number
-  // This async function is called before a route is loaded.
-  // If an error is thrown here, the route's loader will not be called.
-  // If thrown during a navigation, the navigation will be cancelled and the error will be passed to the `onError` function.
-  // If thrown during a preload event, the error will be logged to the console.
-  beforeLoad?: (
-    opts: LoaderContext<
-      TSearchSchema,
-      TFullSearchSchema,
-      TAllParams,
-      NoInfer<TRouteContext>,
-      TAllContext
-    >,
-  ) => Promise<void> | void
   onError?: (err: any) => void
-  // This function is called
-  // when moving from an inactive state to an active one. Likewise, when moving from
-  // an active to an inactive state, the return function (if provided) is called.
-  onLoaded?: (matchContext: {
-    params: TAllParams
-    search: TFullSearchSchema
-  }) =>
-    | void
-    | undefined
-    | ((match: { params: TAllParams; search: TFullSearchSchema }) => void)
-  // This function is called when the route remains active from one transition to the next.
-  onTransition?: (match: {
-    params: TAllParams
-    search: TFullSearchSchema
-  }) => void
+  // These functions are called as route matches are loaded, stick around and leave the active
+  // matches
+  onEnter?: (match: AnyRouteMatch) => void
+  onTransition?: (match: AnyRouteMatch) => void
+  onLeave?: (match: AnyRouteMatch) => void
 }
 
 export type ParseParamsOption<TPath extends string, TParams> = ParseParamsFn<
@@ -685,15 +637,7 @@ export class Route<
     TAllParentContext,
     TRouteContext,
     TAllContext
-  > &
-    UpdatableRouteOptions<
-      TLoader,
-      TSearchSchema,
-      TFullSearchSchema,
-      TAllParams,
-      TRouteContext,
-      TAllContext
-    >
+  >
 
   // Set up in this.init()
   parentRoute!: TParentRoute
@@ -736,7 +680,7 @@ export class Route<
   ) {
     this.options = (options as any) || {}
     this.isRoot = !options?.getParentRoute as any
-    Route.__onInit(this as any)
+    Route.__onInit(this)
   }
 
   init = (opts: { originalIndex: number; router: AnyRouter }) => {
@@ -842,7 +786,7 @@ export class Route<
     return this
   }
 
-  static __onInit = (route: typeof this) => {
+  static __onInit = (route: any) => {
     // This is a dummy static method that should get
     // replaced by a framework specific implementation if necessary
   }
