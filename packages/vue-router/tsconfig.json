@@ -6,6 +6,6 @@
     "outDir": "./build/types",
     "jsxImportSource": "vue"
   },
-  "files": ["src/vue.tsx"],
+  "files": ["src/index.tsx"],
   "include": ["src"],
 }

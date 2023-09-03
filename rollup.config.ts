@@ -114,7 +114,7 @@ function esm({ input, packageDir, external, banner }: Options): RollupOptions {
     },
 
     plugins: [
-        dts({
+       packageDir === "packages/vue-router" && dts({
             compilerOptions: {
               preserveSymlinks: false,
             },
@@ -241,7 +241,13 @@ function types({
       }.d.ts`,
       banner,
     },
-    plugins: [dts()],
+    plugins: [ 
+        jsName === 'VueRouter' ?  dts({
+            compilerOptions: {
+            preserveSymlinks: false,
+            },
+      }) : dts()
+       ,],
   }
 }
 

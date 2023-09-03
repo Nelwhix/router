@@ -1,18 +1,255 @@
-import { inject, InjectionKey, ref, h } from 'vue'
-import { RegisteredRouter, pick } from "@tanstack/router-core"
+import { inject, InjectionKey, ref, h, DefineComponent, ComponentOptionsMixin, ExtractPropTypes } from 'vue'
 import warning from 'tiny-warning'
 import invariant from 'tiny-invariant'
 import { useStore } from '@tanstack/react-store'
+import {
+    functionalUpdate,
+    last,
+    pick,
+    MatchRouteOptions,
+    RegisteredRouter,
+    RouterOptions,
+    Router,
+    RouteMatch,
+    RouteByPath,
+    AnyRoute,
+    AnyRouteProps,
+    LinkOptions,
+    ToOptions,
+    ResolveRelativePath,
+    NavigateOptions,
+    ResolveFullPath,
+    ResolveId,
+    AnySearchSchema,
+    ParsePathParams,
+    MergeParamsFromParent,
+    RouteContext,
+    AnyContext,
+    UseLoaderResult,
+    ResolveFullSearchSchema,
+    Route,
+    RouteConstraints,
+    RoutePaths,
+    RoutesById,
+    RouteIds,
+    RouteById,
+    ParseRoute,
+    AllParams,
+    rootRouteId,
+    AnyPathParams,
+  } from '@tanstack/router-core'
 
 
+declare module '@tanstack/router-core' {
+    interface RegisterRouteComponent{
+        RouteComponent: DefineComponent
+    }
+  
+    interface RegisterErrorRouteComponent<
+      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+      TAllParams extends AnyPathParams = AnyPathParams,
+      TRouteContext extends AnyContext = AnyContext,
+      TAllContext extends AnyContext = AnyContext,
+    > {
+      ErrorRouteComponent: RouteComponent<
+        ErrorRouteProps<TFullSearchSchema, TAllParams, TRouteContext, TAllContext>
+      >
+    }
+  
+    interface RegisterPendingRouteComponent<
+      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+      TAllParams extends AnyPathParams = AnyPathParams,
+      TRouteContext extends AnyContext = AnyContext,
+      TAllContext extends AnyContext = AnyContext,
+    > {
+      PendingRouteComponent: RouteComponent<
+        PendingRouteProps<
+          TFullSearchSchema,
+          TAllParams,
+          TRouteContext,
+          TAllContext
+        >
+      >
+    }
+  
+    interface Route<
+      TParentRoute extends RouteConstraints['TParentRoute'] = AnyRoute,
+      TPath extends RouteConstraints['TPath'] = '/',
+      TFullPath extends RouteConstraints['TFullPath'] = ResolveFullPath<
+        TParentRoute,
+        TPath
+      >,
+      TCustomId extends RouteConstraints['TCustomId'] = string,
+      TId extends RouteConstraints['TId'] = ResolveId<
+        TParentRoute,
+        TCustomId,
+        TPath
+      >,
+      TLoader = unknown,
+      TSearchSchema extends RouteConstraints['TSearchSchema'] = {},
+      TFullSearchSchema extends RouteConstraints['TFullSearchSchema'] = ResolveFullSearchSchema<
+        TParentRoute,
+        TSearchSchema
+      >,
+      TParams extends RouteConstraints['TParams'] = Record<
+        ParsePathParams<TPath>,
+        string
+      >,
+      TAllParams extends RouteConstraints['TAllParams'] = MergeParamsFromParent<
+        TParentRoute['types']['allParams'],
+        TParams
+      >,
+      TParentContext extends RouteConstraints['TParentContext'] = TParentRoute['types']['routeContext'],
+      TAllParentContext extends RouteConstraints['TAllParentContext'] = TParentRoute['types']['context'],
+      TRouteContext extends RouteConstraints['TRouteContext'] = RouteContext,
+      TAllContext extends RouteConstraints['TAllContext'] = MergeParamsFromParent<
+        TParentRoute['types']['context'],
+        TRouteContext
+      >,
+      TRouterContext extends RouteConstraints['TRouterContext'] = AnyContext,
+      TChildren extends RouteConstraints['TChildren'] = unknown,
+      TRouteTree extends RouteConstraints['TRouteTree'] = AnyRoute,
+    > {
+      useMatch: <TSelected = TAllContext>(opts?: {
+        select?: (search: TAllContext) => TSelected
+      }) => TSelected
+      useLoader: <TSelected = TLoader>(opts?: {
+        select?: (search: TLoader) => TSelected
+      }) => UseLoaderResult<TSelected>
+      useContext: <TSelected = TAllContext>(opts?: {
+        select?: (search: TAllContext) => TSelected
+      }) => TSelected
+      useRouteContext: <TSelected = TRouteContext>(opts?: {
+        select?: (search: TRouteContext) => TSelected
+      }) => TSelected
+      useSearch: <TSelected = TFullSearchSchema>(opts?: {
+        select?: (search: TFullSearchSchema) => TSelected
+      }) => TSelected
+      useParams: <TSelected = TAllParams>(opts?: {
+        select?: (search: TAllParams) => TSelected
+      }) => TSelected
+    }
+  
+    interface RegisterRouteProps<
+      TLoader = unknown,
+      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+      TAllParams extends AnyPathParams = AnyPathParams,
+      TRouteContext extends AnyContext = AnyContext,
+      TAllContext extends AnyContext = AnyContext,
+    > {
+      RouteProps: RouteProps<
+        TLoader,
+        TFullSearchSchema,
+        TAllParams,
+        TRouteContext,
+        TAllContext
+      >
+    }
+  
+    interface RegisterPendingRouteProps<
+      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+      TAllParams extends AnyPathParams = AnyPathParams,
+      TRouteContext extends AnyContext = AnyContext,
+      TAllContext extends AnyContext = AnyContext,
+    > {
+      PendingRouteProps: PendingRouteProps<
+        TFullSearchSchema,
+        TAllParams,
+        TRouteContext,
+        TAllContext
+      >
+    }
+  
+    interface RegisterErrorRouteProps<
+      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+      TAllParams extends AnyPathParams = AnyPathParams,
+      TRouteContext extends AnyContext = AnyContext,
+      TAllContext extends AnyContext = AnyContext,
+    > {
+      ErrorRouteProps: ErrorRouteProps
+    }
+  }
+
+  export type ErrorRouteProps<
+  TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+  TAllParams extends AnyPathParams = AnyPathParams,
+  TRouteContext extends AnyContext = AnyContext,
+  TAllContext extends AnyContext = AnyContext,
+> = {
+  error: unknown
+  info: { componentStack: string }
+} & Omit<
+  RouteProps<
+    unknown,
+    TFullSearchSchema,
+    TAllParams,
+    TRouteContext,
+    TAllContext
+  >,
+  'useLoader'
+>
+
+export type PendingRouteProps<
+  TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+  TAllParams extends AnyPathParams = AnyPathParams,
+  TRouteContext extends AnyContext = AnyContext,
+  TAllContext extends AnyContext = AnyContext,
+> = Omit<
+  RouteProps<
+    unknown,
+    TFullSearchSchema,
+    TAllParams,
+    TRouteContext,
+    TAllContext
+  >,
+  'useLoader'
+>
+
+export type RouteComponent<TProps> = AsyncRouteComponent<TProps>
+
+export type AsyncRouteComponent<TProps> = SyncRouteComponent<TProps> & {
+    preload?: () => Promise<void>
+  }
+
+  export type SyncRouteComponent<TProps> =
+  | ((props: TProps) => HTMLElement)
+
+export const RouterProvider = Symbol() as InjectionKey<RegisteredRouter>
 const matchIdsContext = Symbol() as InjectionKey<string[]>
-const routerContext = Symbol() as InjectionKey<RegisteredRouter>
+const routerContext = RouterProvider
 
 export function useRouter(): RegisteredRouter {
     const value = inject(routerContext)!
 
     warning(value, 'useRouter must be used inside a <Router> component!')
     return value
+}
+
+export type RouteProps<
+  TLoader = unknown,
+  TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+  TAllParams extends AnyPathParams = AnyPathParams,
+  TRouteContext extends AnyContext = AnyContext,
+  TAllContext extends AnyContext = AnyContext,
+> = {
+  useLoader: <TSelected = TLoader>(opts?: {
+    select?: (search: TLoader) => TSelected
+  }) => UseLoaderResult<TSelected>
+  useMatch: <TSelected = TAllContext>(opts?: {
+    select?: (search: TAllContext) => TSelected
+  }) => TSelected
+  useContext: <TSelected = TAllContext>(opts?: {
+    select?: (search: TAllContext) => TSelected
+  }) => TSelected
+  useRouteContext: <TSelected = TRouteContext>(opts?: {
+    select?: (search: TRouteContext) => TSelected
+  }) => TSelected
+  useSearch: <TSelected = TFullSearchSchema>(opts?: {
+    select?: (search: TFullSearchSchema) => TSelected
+  }) => TSelected
+  useParams: <TSelected = TAllParams>(opts?: {
+    select?: (search: TAllParams) => TSelected
+  }) => TSelected
 }
 
 export function Outlet() {
@@ -73,7 +310,7 @@ export function ErrorComponent({ error }: { error: any }) {
     select: (state: RegisteredRouter['state']) => TSelected
   }): TSelected {
     const router = useRouter()
-    return useStore(router.__store, opts?.select)
+    return useStore(router.__store, opts?.select as any)
   }
 
   function MatchInner({
@@ -101,8 +338,8 @@ export function ErrorComponent({ error }: { error: any }) {
     if (match.status === 'pending') {
       return h(PendingComponent, {
         useLoader: route.useLoader,
-        useMatch: route.useMatch,
-        useContext: route.useContext,
+        useMatch: route.useMatch as any,
+        useContext: route.useContext as any,
         useRouteContext: route.useRouteContext,
         useSearch: route.useSearch,
         useParams: route.useParams,
