@@ -56,6 +56,7 @@ import {
   createMemoryHistory,
   RouterHistory,
 } from './history'
+import warning from 'tiny-warning'
 
 //
 
@@ -193,10 +194,7 @@ export interface RouterOptions<
   hydrate?: (dehydrated: TDehydrated) => void
 }
 
-export interface RouterState<
-  TRouteTree extends AnyRoute = AnyRoute,
-  // TState extends LocationState = LocationState,
-> {
+export interface RouterState<TRouteTree extends AnyRoute = AnyRoute> {
   status: 'idle' | 'pending'
   isFetching: boolean
   matchesById: Record<string, RouteMatch<TRouteTree>>
@@ -204,6 +202,8 @@ export interface RouterState<
   pendingMatchIds: string[]
   matches: RouteMatch<TRouteTree>[]
   pendingMatches: RouteMatch<TRouteTree>[]
+  renderedMatchIds: string[]
+  renderedMatches: RouteMatch<TRouteTree>[]
   location: ParsedLocation<FullSearchSchema<TRouteTree>>
   resolvedLocation: ParsedLocation<FullSearchSchema<TRouteTree>>
   lastUpdated: number
@@ -243,6 +243,7 @@ type LinkCurrentTargetElement = {
 }
 
 export interface DehydratedRouterState {
+  matchIds: string[]
   dehydratedMatches: DehydratedRouteMatch[]
 }
 
@@ -298,6 +299,7 @@ export type RouterListener<TRouterEvent extends RouterEvent> = {
 
 const visibilityChangeEvent = 'visibilitychange'
 const focusEvent = 'focus'
+const preloadWarning = 'Error preloading route! ☝️'
 
 export class Router<
   TRouteTree extends AnyRoute = AnyRoute,
@@ -365,6 +367,21 @@ export class Router<
 
         if (matchesByIdChanged || pendingMatchesChanged) {
           next.pendingMatches = next.pendingMatchIds.map((id) => {
+            return next.matchesById[id] as any
+          })
+        }
+
+        if (matchesByIdChanged || matchesChanged || pendingMatchesChanged) {
+          const hasPendingComponent = next.pendingMatches.some((d) => {
+            const route = this.getRoute(d.routeId as any)
+            return !!route?.options.pendingComponent
+          })
+
+          next.renderedMatchIds = hasPendingComponent
+            ? next.pendingMatchIds
+            : next.matchIds
+
+          next.renderedMatches = next.renderedMatchIds.map((id) => {
             return next.matchesById[id] as any
           })
         }
@@ -663,24 +680,10 @@ export class Router<
     prevMatchesById: Record<string, RouteMatch<TRouteTree>>,
     nextMatches: AnyRouteMatch[],
   ): Record<string, RouteMatch<TRouteTree>> => {
-    const nextMatchesById: any = {
+    return {
       ...prevMatchesById,
+      ...Object.fromEntries(nextMatches.map((match) => [match.id, match])),
     }
-
-    let hadNew = false
-
-    nextMatches.forEach((match) => {
-      if (!nextMatchesById[match.id]) {
-        hadNew = true
-        nextMatchesById[match.id] = match
-      }
-    })
-
-    if (!hadNew) {
-      return prevMatchesById
-    }
-
-    return nextMatchesById
   }
 
   getRoute = (id: string): Route => {
@@ -890,16 +893,20 @@ export class Router<
               ? route.options.validateSearch.parse
               : route.options.validateSearch
 
-          const routeSearch = validator?.(parentSearchInfo.search) ?? {}
+          let routeSearch = validator?.(parentSearchInfo.search) ?? {}
 
-          const search = {
+          let search = {
             ...parentSearchInfo.search,
             ...routeSearch,
           }
 
+          routeSearch = replaceEqualDeep(match.routeSearch, routeSearch)
+          search = replaceEqualDeep(match.search, search)
+
           return {
-            routeSearch: replaceEqualDeep(match.routeSearch, routeSearch),
-            search: replaceEqualDeep(match.search, search),
+            routeSearch,
+            search,
+            searchDidChange: match.routeSearch !== routeSearch,
           }
         } catch (err: any) {
           match.searchError = new SearchParamError(err.message, {
@@ -1322,7 +1329,7 @@ export class Router<
       if (preload) {
         this.preloadRoute(nextOpts).catch((err) => {
           console.warn(err)
-          console.warn('Error preloading route! ☝️')
+          console.warn(preloadWarning)
         })
       }
     }
@@ -1330,7 +1337,7 @@ export class Router<
     const handleTouchStart = (e: TouchEvent) => {
       this.preloadRoute(nextOpts).catch((err) => {
         console.warn(err)
-        console.warn('Error preloading route! ☝️')
+        console.warn(preloadWarning)
       })
     }
 
@@ -1346,7 +1353,7 @@ export class Router<
           target.preloadTimeout = null
           this.preloadRoute(nextOpts).catch((err) => {
             console.warn(err)
-            console.warn('Error preloading route! ☝️')
+            console.warn(preloadWarning)
           })
         }, preloadDelay)
       }
@@ -1377,6 +1384,7 @@ export class Router<
   dehydrate = (): DehydratedRouter => {
     return {
       state: {
+        matchIds: this.state.matchIds,
         dehydratedMatches: this.state.matches.map((d) =>
           pick(d, [
             'fetchedAt',
@@ -1408,13 +1416,15 @@ export class Router<
     const ctx = _ctx
     this.dehydratedData = ctx.payload as any
     this.options.hydrate?.(ctx.payload as any)
-    const { dehydratedMatches } = ctx.router.state
+    const dehydratedState = ctx.router.state
 
     let matches = this.matchRoutes(
       this.state.location.pathname,
       this.state.location.search,
     ).map((match) => {
-      const dehydratedMatch = dehydratedMatches.find((d) => d.id === match.id)
+      const dehydratedMatch = dehydratedState.dehydratedMatches.find(
+        (d) => d.id === match.id,
+      )
 
       invariant(
         dehydratedMatch,
@@ -1433,6 +1443,7 @@ export class Router<
     this.__store.setState((s) => {
       return {
         ...s,
+        matchIds: dehydratedState.matchIds,
         matches,
         matchesById: this.#mergeMatches(s.matchesById, matches),
       }
@@ -1456,10 +1467,10 @@ export class Router<
         return `<script id='${id}' suppressHydrationWarning>window["__TSR_DEHYDRATED__${escapeJSON(
           strKey,
         )}"] = ${JSON.stringify(data)}
-        // ;(() => {
-        //   var el = document.getElementById('${id}')
-        //   el.parentElement.removeChild(el)
-        // })()
+        ;(() => {
+          var el = document.getElementById('${id}')
+          el.parentElement.removeChild(el)
+        })()
         </script>`
       })
 
@@ -1715,7 +1726,6 @@ export class Router<
     location: BuildNextOptions & { replace?: boolean; resetScroll?: boolean },
   ) => {
     const next = this.buildNext(location)
-    const id = '' + Date.now() + Math.random()
 
     if (this.navigateTimeout) clearTimeout(this.navigateTimeout)
 
@@ -1735,10 +1745,7 @@ export class Router<
       next.hash ? `#${next.hash}` : ''
     }`
 
-    this.history[nextAction === 'push' ? 'push' : 'replace'](href, {
-      id,
-      ...next.state,
-    })
+    this.history[nextAction === 'push' ? 'push' : 'replace'](href, next.state)
 
     this.resetNextScroll = location.resetScroll ?? true
 
@@ -1755,7 +1762,7 @@ export class Router<
   ) => {
     this.__store.setState((prev) => {
       if (!prev.matchesById[id]) {
-        console.warn(`No match found with id: ${id}`)
+        return prev
       }
 
       return {
@@ -1856,6 +1863,8 @@ function getInitialRouterState(): RouterState<any> {
     pendingMatchIds: [],
     matches: [],
     pendingMatches: [],
+    renderedMatchIds: [],
+    renderedMatches: [],
     lastUpdated: Date.now(),
   }
 }
