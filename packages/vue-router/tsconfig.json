@@ -1,11 +1,17 @@
 {
     "composite": true,
     "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "jsx": "preserve",
-    "outDir": "./build/types",
-    "jsxImportSource": "vue"
-  },
-  "files": ["src/index.tsx"],
-  "include": ["src"],
+    "compilerOptions": {
+        "jsx": "preserve",
+        "outDir": "./build/types",
+        "jsxImportSource": "vue"
+    },
+    "files": [
+        "src/index.tsx"
+    ],
+    "include": [
+        "src"
+    ],
+    "module": "ESNext",
+    "target": "esnext",
 }

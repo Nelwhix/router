@@ -1886,9 +1886,6 @@ importers:
 
   packages/vue-router:
     dependencies:
-      '@babel/runtime':
-        specifier: ^7.16.7
-        version: 7.22.11
       '@tanstack/react-store':
         specifier: ^0.0.1
         version: 0.0.1(react-dom@18.2.0)(react@18.2.0)

@@ -215,11 +215,11 @@ export type AsyncRouteComponent<TProps> = SyncRouteComponent<TProps> & {
   | ((props: TProps) => HTMLElement)
 
 export const RouterProvider = Symbol() as InjectionKey<RegisteredRouter>
+export const testing = "Nelson is a nice guy"
 const matchIdsContext = Symbol() as InjectionKey<string[]>
-const routerContext = RouterProvider
 
 export function useRouter(): RegisteredRouter {
-    const value = inject(routerContext)!
+    const value = inject(RouterProvider)!
 
     warning(value, 'useRouter must be used inside a <Router> component!')
     return value
