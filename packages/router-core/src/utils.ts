@@ -1,5 +1,5 @@
 export type NoInfer<T> = [T][T extends any ? 0 : never]
-export type IsAny<T, Y, N> = 1 extends 0 & T ? Y : N
+export type IsAny<T, Y, N = T> = 1 extends 0 & T ? Y : N
 export type IsAnyBoolean<T> = 1 extends 0 & T ? true : false
 export type IsKnown<T, Y, N> = unknown extends T ? N : Y
 export type PickAsRequired<T, K extends keyof T> = Omit<T, K> &
@@ -31,21 +31,41 @@ export type UnionToIntersection<U> = (
   ? I
   : never
 
-type Compute<T> = { [K in keyof T]: T[K] } | never
+// type Compute<T> = { [K in keyof T]: T[K] } | never
 
-type AllKeys<T> = T extends any ? keyof T : never
+// type AllKeys<T> = T extends any ? keyof T : never
 
-export type MergeUnion<T, Keys extends keyof T = keyof T> = Compute<
-  {
-    [K in Keys]: T[Keys]
-  } & {
-    [K in AllKeys<T>]?: T extends any
-      ? K extends keyof T
-        ? T[K]
-        : never
-      : never
-  }
->
+// export type MergeUnion<T, Keys extends keyof T = keyof T> = Compute<
+//   {
+//     [K in Keys]: T[Keys]
+//   } & {
+//     [K in AllKeys<T>]?: T extends any
+//       ? K extends keyof T
+//         ? T[K]
+//         : never
+//       : never
+//   }
+// >
+
+export type DeepMerge<A, B> = {
+  [K in keyof (A & B)]: K extends keyof B
+    ? B[K]
+    : K extends keyof A
+    ? A[K]
+    : never
+} & (A extends Record<string, any>
+  ? Pick<A, Exclude<keyof A, keyof B>>
+  : never) &
+  (B extends Record<string, any> ? Pick<B, Exclude<keyof B, keyof A>> : never)
+
+export type DeepMergeAll<T extends any[]> = T extends [
+  infer Left,
+  ...infer Rest,
+]
+  ? Rest extends any[]
+    ? DeepMerge<Left, DeepMergeAll<Rest>>
+    : Left
+  : {}
 
 export type Values<O> = O[ValueKeys<O>]
 export type ValueKeys<O> = Extract<keyof O, PropertyKey>
@@ -69,6 +89,10 @@ export type Updater<TPrevious, TResult = TPrevious> =
   | TResult
   | ((prev?: TPrevious) => TResult)
 
+export type NonNullableUpdater<TPrevious, TResult = TPrevious> =
+  | TResult
+  | ((prev: TPrevious) => TResult)
+
 export type PickExtract<T, U> = {
   [K in keyof T as T[K] extends U ? K : never]: T[K]
 }
@@ -86,9 +110,9 @@ function isFunction(d: any): d is Function {
 }
 
 export function functionalUpdate<TResult>(
-  updater: Updater<TResult>,
+  updater: Updater<TResult> | NonNullableUpdater<TResult>,
   previous: TResult,
-) {
+): TResult {
   if (isFunction(updater)) {
     return updater(previous as TResult)
   }

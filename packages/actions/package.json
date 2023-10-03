@@ -1,7 +1,11 @@
 {
   "name": "@tanstack/actions",
   "author": "Tanner Linsley",
+<<<<<<< HEAD
   "version": "0.0.1-beta.185",
+=======
+  "version": "0.0.1-beta.194",
+>>>>>>> c1acbf58f85b70eee809c8217b559618a6643944
   "license": "MIT",
   "repository": "tanstack/actions",
   "homepage": "https://tanstack.com/actions",
