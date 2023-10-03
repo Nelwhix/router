@@ -3,7 +3,7 @@ import {
   AnyRoute,
   ResolveFullPath,
   ResolveFullSearchSchema,
-  MergeParamsFromParent,
+  MergeFromFromParent,
   RouteContext,
   AnyContext,
   RouteOptions,
@@ -15,6 +15,7 @@ import {
   TrimPathLeft,
   RouteConstraints,
 } from './route'
+import { DeepMergeAll, Expand, IsAny } from './utils'
 
 export interface FileRoutesByPath {
   // '/': {
@@ -85,6 +86,7 @@ export class FileRoute<
   constructor(public path: TFilePath) {}
 
   createRoute = <
+    TLoaderContext extends RouteConstraints['TLoaderContext'] = {},
     TLoader = unknown,
     TSearchSchema extends RouteConstraints['TSearchSchema'] = {},
     TFullSearchSchema extends RouteConstraints['TFullSearchSchema'] = ResolveFullSearchSchema<
@@ -94,16 +96,19 @@ export class FileRoute<
     TParams extends RouteConstraints['TParams'] = ParsePathParams<TPath> extends never
       ? AnyPathParams
       : Record<ParsePathParams<TPath>, RouteConstraints['TPath']>,
-    TAllParams extends RouteConstraints['TAllParams'] = MergeParamsFromParent<
+    TAllParams extends RouteConstraints['TAllParams'] = MergeFromFromParent<
       TParentRoute['types']['allParams'],
       TParams
     >,
-    TParentContext extends RouteConstraints['TParentContext'] = TParentRoute['types']['routeContext'],
-    TAllParentContext extends RouteConstraints['TId'] = TParentRoute['types']['context'],
     TRouteContext extends RouteConstraints['TRouteContext'] = RouteContext,
-    TContext extends RouteConstraints['TAllContext'] = MergeParamsFromParent<
-      TParentRoute['types']['context'],
-      TRouteContext
+    TContext extends RouteConstraints['TAllContext'] = Expand<
+      DeepMergeAll<
+        [
+          IsAny<TParentRoute['types']['context'], {}>,
+          TLoaderContext,
+          TRouteContext,
+        ]
+      >
     >,
     TRouterContext extends RouteConstraints['TRouterContext'] = AnyContext,
     TChildren extends RouteConstraints['TChildren'] = unknown,
@@ -114,14 +119,12 @@ export class FileRoute<
         TParentRoute,
         string,
         string,
+        TLoaderContext,
         TLoader,
-        InferFullSearchSchema<TParentRoute>,
         TSearchSchema,
         TFullSearchSchema,
         TParams,
         TAllParams,
-        TParentContext,
-        TAllParentContext,
         TRouteContext,
         TContext
       >,
@@ -141,13 +144,12 @@ export class FileRoute<
     TFullPath,
     TFilePath,
     TId,
+    TLoaderContext,
     TLoader,
     TSearchSchema,
     TFullSearchSchema,
     TParams,
     TAllParams,
-    TParentContext,
-    TAllParentContext,
     TRouteContext,
     TContext,
     TRouterContext,

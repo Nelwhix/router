@@ -22,7 +22,6 @@ import {
   ResolveId,
   AnySearchSchema,
   ParsePathParams,
-  MergeParamsFromParent,
   RouteContext,
   AnyContext,
   UseLoaderResult,
@@ -37,51 +36,51 @@ import {
   AllParams,
   rootRouteId,
   AnyPathParams,
+  Expand,
+  ResolveAllParams,
+  DeepMergeAll,
+  IsAny,
 } from '@tanstack/router-core'
 
 declare module '@tanstack/router-core' {
+  interface RouterOptions<
+    TRouteTree extends AnyRoute,
+    TDehydrated extends Record<string, any>,
+  > {
+    Wrap?: React.ComponentType<{
+      children: React.ReactNode
+      dehydratedState?: TDehydrated
+    }>
+  }
+
   interface RegisterRouteComponent<
     TLoader = unknown,
-    TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+    TFullSearchSchema extends Record<string, any> = AnySearchSchema,
     TAllParams extends AnyPathParams = AnyPathParams,
-    TRouteContext extends AnyContext = AnyContext,
-    TAllContext extends AnyContext = AnyContext,
+    TAllContext extends Record<string, any> = AnyContext,
   > {
     RouteComponent: RouteComponent<
-      RouteProps<
-        TLoader,
-        TFullSearchSchema,
-        TAllParams,
-        TRouteContext,
-        TAllContext
-      >
+      RouteProps<TLoader, TFullSearchSchema, TAllParams, TAllContext>
     >
   }
 
   interface RegisterErrorRouteComponent<
-    TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+    TFullSearchSchema extends Record<string, any> = AnySearchSchema,
     TAllParams extends AnyPathParams = AnyPathParams,
-    TRouteContext extends AnyContext = AnyContext,
-    TAllContext extends AnyContext = AnyContext,
+    TAllContext extends Record<string, any> = AnyContext,
   > {
     ErrorRouteComponent: RouteComponent<
-      ErrorRouteProps<TFullSearchSchema, TAllParams, TRouteContext, TAllContext>
+      ErrorRouteProps<TFullSearchSchema, TAllParams, TAllContext>
     >
   }
 
   interface RegisterPendingRouteComponent<
-    TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+    TFullSearchSchema extends Record<string, any> = AnySearchSchema,
     TAllParams extends AnyPathParams = AnyPathParams,
-    TRouteContext extends AnyContext = AnyContext,
-    TAllContext extends AnyContext = AnyContext,
+    TAllContext extends Record<string, any> = AnyContext,
   > {
     PendingRouteComponent: RouteComponent<
-      PendingRouteProps<
-        TFullSearchSchema,
-        TAllParams,
-        TRouteContext,
-        TAllContext
-      >
+      PendingRouteProps<TFullSearchSchema, TAllParams, TAllContext>
     >
   }
 
@@ -98,26 +97,29 @@ declare module '@tanstack/router-core' {
       TCustomId,
       TPath
     >,
+    TLoaderContext extends RouteConstraints['TLoaderContext'] = AnyContext,
     TLoader = unknown,
     TSearchSchema extends RouteConstraints['TSearchSchema'] = {},
     TFullSearchSchema extends RouteConstraints['TFullSearchSchema'] = ResolveFullSearchSchema<
       TParentRoute,
       TSearchSchema
     >,
-    TParams extends RouteConstraints['TParams'] = Record<
-      ParsePathParams<TPath>,
-      string
+    TParams extends RouteConstraints['TParams'] = Expand<
+      Record<ParsePathParams<TPath>, string>
     >,
-    TAllParams extends RouteConstraints['TAllParams'] = MergeParamsFromParent<
-      TParentRoute['types']['allParams'],
+    TAllParams extends RouteConstraints['TAllParams'] = ResolveAllParams<
+      TParentRoute,
       TParams
     >,
-    TParentContext extends RouteConstraints['TParentContext'] = TParentRoute['types']['routeContext'],
-    TAllParentContext extends RouteConstraints['TAllParentContext'] = TParentRoute['types']['context'],
     TRouteContext extends RouteConstraints['TRouteContext'] = RouteContext,
-    TAllContext extends RouteConstraints['TAllContext'] = MergeParamsFromParent<
-      TParentRoute['types']['context'],
-      TRouteContext
+    TAllContext extends RouteConstraints['TAllContext'] = Expand<
+      DeepMergeAll<
+        [
+          IsAny<TParentRoute['types']['context'], {}>,
+          TLoaderContext,
+          TRouteContext,
+        ]
+      >
     >,
     TRouterContext extends RouteConstraints['TRouterContext'] = AnyContext,
     TChildren extends RouteConstraints['TChildren'] = unknown,
@@ -129,11 +131,8 @@ declare module '@tanstack/router-core' {
     useLoader: <TSelected = TLoader>(opts?: {
       select?: (search: TLoader) => TSelected
     }) => UseLoaderResult<TSelected>
-    useContext: <TSelected = TAllContext>(opts?: {
+    useRouteContext: <TSelected = TAllContext>(opts?: {
       select?: (search: TAllContext) => TSelected
-    }) => TSelected
-    useRouteContext: <TSelected = TRouteContext>(opts?: {
-      select?: (search: TRouteContext) => TSelected
     }) => TSelected
     useSearch: <TSelected = TFullSearchSchema>(opts?: {
       select?: (search: TFullSearchSchema) => TSelected
@@ -145,39 +144,29 @@ declare module '@tanstack/router-core' {
 
   interface RegisterRouteProps<
     TLoader = unknown,
-    TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+    TFullSearchSchema extends Record<string, any> = AnySearchSchema,
     TAllParams extends AnyPathParams = AnyPathParams,
-    TRouteContext extends AnyContext = AnyContext,
-    TAllContext extends AnyContext = AnyContext,
+    TAllContext extends Record<string, any> = AnyContext,
   > {
-    RouteProps: RouteProps<
-      TLoader,
-      TFullSearchSchema,
-      TAllParams,
-      TRouteContext,
-      TAllContext
-    >
+    RouteProps: RouteProps<TLoader, TFullSearchSchema, TAllParams, TAllContext>
   }
 
   interface RegisterPendingRouteProps<
-    TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+    TFullSearchSchema extends Record<string, any> = AnySearchSchema,
     TAllParams extends AnyPathParams = AnyPathParams,
-    TRouteContext extends AnyContext = AnyContext,
-    TAllContext extends AnyContext = AnyContext,
+    TAllContext extends Record<string, any> = AnyContext,
   > {
     PendingRouteProps: PendingRouteProps<
       TFullSearchSchema,
       TAllParams,
-      TRouteContext,
       TAllContext
     >
   }
 
   interface RegisterErrorRouteProps<
-    TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+    TFullSearchSchema extends Record<string, any> = AnySearchSchema,
     TAllParams extends AnyPathParams = AnyPathParams,
-    TRouteContext extends AnyContext = AnyContext,
-    TAllContext extends AnyContext = AnyContext,
+    TAllContext extends Record<string, any> = AnyContext,
   > {
     ErrorRouteProps: ErrorRouteProps
   }
@@ -185,10 +174,9 @@ declare module '@tanstack/router-core' {
 
 export type RouteProps<
   TLoader = unknown,
-  TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+  TFullSearchSchema extends Record<string, any> = AnySearchSchema,
   TAllParams extends AnyPathParams = AnyPathParams,
-  TRouteContext extends AnyContext = AnyContext,
-  TAllContext extends AnyContext = AnyContext,
+  TAllContext extends Record<string, any> = AnyContext,
 > = {
   useLoader: <TSelected = TLoader>(opts?: {
     select?: (search: TLoader) => TSelected
@@ -196,11 +184,8 @@ export type RouteProps<
   useMatch: <TSelected = TAllContext>(opts?: {
     select?: (search: TAllContext) => TSelected
   }) => TSelected
-  useContext: <TSelected = TAllContext>(opts?: {
+  useRouteContext: <TSelected = TAllContext>(opts?: {
     select?: (search: TAllContext) => TSelected
-  }) => TSelected
-  useRouteContext: <TSelected = TRouteContext>(opts?: {
-    select?: (search: TRouteContext) => TSelected
   }) => TSelected
   useSearch: <TSelected = TFullSearchSchema>(opts?: {
     select?: (search: TFullSearchSchema) => TSelected
@@ -211,37 +196,23 @@ export type RouteProps<
 }
 
 export type ErrorRouteProps<
-  TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+  TFullSearchSchema extends Record<string, any> = AnySearchSchema,
   TAllParams extends AnyPathParams = AnyPathParams,
-  TRouteContext extends AnyContext = AnyContext,
-  TAllContext extends AnyContext = AnyContext,
+  TAllContext extends Record<string, any> = AnyContext,
 > = {
   error: unknown
   info: { componentStack: string }
 } & Omit<
-  RouteProps<
-    unknown,
-    TFullSearchSchema,
-    TAllParams,
-    TRouteContext,
-    TAllContext
-  >,
+  RouteProps<unknown, TFullSearchSchema, TAllParams, TAllContext>,
   'useLoader'
 >
 
 export type PendingRouteProps<
-  TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
+  TFullSearchSchema extends Record<string, any> = AnySearchSchema,
   TAllParams extends AnyPathParams = AnyPathParams,
-  TRouteContext extends AnyContext = AnyContext,
-  TAllContext extends AnyContext = AnyContext,
+  TAllContext extends Record<string, any> = AnyContext,
 > = Omit<
-  RouteProps<
-    unknown,
-    TFullSearchSchema,
-    TAllParams,
-    TRouteContext,
-    TAllContext
-  >,
+  RouteProps<unknown, TFullSearchSchema, TAllParams, TAllContext>,
   'useLoader'
 >
 
@@ -253,19 +224,11 @@ Route.__onInit = (route) => {
     useLoader: (opts = {}) => {
       return useLoader({ ...opts, from: route.id }) as any
     },
-    useContext: (opts: any = {}) => {
-      return useMatch({
-        ...opts,
-        from: route.id,
-        select: (d: any) => (opts?.select ? opts.select(d.context) : d.context),
-      } as any)
-    },
     useRouteContext: (opts: any = {}) => {
       return useMatch({
         ...opts,
         from: route.id,
-        select: (d: any) =>
-          opts?.select ? opts.select(d.routeContext) : d.routeContext,
+        select: (d: any) => (opts?.select ? opts.select(d.context) : d.context),
       } as any)
     },
     useSearch: (opts = {}) => {
@@ -333,9 +296,12 @@ export function lazyRouteComponent<
 }
 
 export type LinkPropsOptions<
-  TFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
-> = LinkOptions<RegisteredRouter['routeTree'], TFrom, TTo> & {
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+> = LinkOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo> & {
   // A function that returns additional props for the `active` state of this link. These props override other props passed to the link (`style`'s are merged, `className`'s are concatenated)
   activeProps?:
     | React.AnchorHTMLAttributes<HTMLAnchorElement>
@@ -349,20 +315,27 @@ export type LinkPropsOptions<
 }
 
 export type MakeUseMatchRouteOptions<
-  TFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
-> = ToOptions<RegisteredRouter['routeTree'], TFrom, TTo> & MatchRouteOptions
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+> = ToOptions<RegisteredRouter['routeTree'], TFrom, TTo, TMaskFrom, TMaskTo> &
+  MatchRouteOptions
 
 export type MakeMatchRouteOptions<
-  TFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
-> = ToOptions<RegisteredRouter['routeTree'], TFrom, TTo> &
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+> = ToOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo> &
   MatchRouteOptions & {
     // If a function is passed as a child, it will be given the `isActive` boolean to aid in further styling on the element it returns
     children?:
       | ((
           params?: RouteByPath<
-            RegisteredRouter['routeTree'],
+            TRouteTree,
             ResolveRelativePath<TFrom, NoInfer<TTo>>
           >['types']['allParams'],
         ) => ReactNode)
@@ -370,14 +343,21 @@ export type MakeMatchRouteOptions<
   }
 
 export type MakeLinkPropsOptions<
-  TFrom extends string = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
-> = LinkPropsOptions<TFrom, TTo> & React.AnchorHTMLAttributes<HTMLAnchorElement>
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+> = LinkPropsOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo> &
+  React.AnchorHTMLAttributes<HTMLAnchorElement>
 
 export type MakeLinkOptions<
-  TFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
-> = LinkPropsOptions<TFrom, TTo> &
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+> = LinkPropsOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo> &
   Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'children'> & {
     // If a function is passed as a child, it will be given the `isActive` boolean to aid in further styling on the element it returns
     children?:
@@ -394,10 +374,13 @@ export type PromptProps = {
 //
 
 export function useLinkProps<
-  TFrom extends string = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
 >(
-  options: MakeLinkPropsOptions<TFrom, TTo>,
+  options: MakeLinkPropsOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo>,
 ): React.AnchorHTMLAttributes<HTMLAnchorElement> {
   const router = useRouter()
 
@@ -415,6 +398,8 @@ export function useLinkProps<
     search,
     params,
     to = '.',
+    state,
+    mask,
     preload,
     preloadDelay,
     replace,
@@ -477,7 +462,11 @@ export function useLinkProps<
     ...resolvedActiveProps,
     ...resolvedInactiveProps,
     ...rest,
-    href: disabled ? undefined : next.href,
+    href: disabled
+      ? undefined
+      : next.maskedLocation
+      ? next.maskedLocation.href
+      : next.href,
     onClick: composeHandlers([onClick, handleReactClick]),
     onFocus: composeHandlers([onFocus, handleFocus]),
     onMouseEnter: composeHandlers([onMouseEnter, handleEnter]),
@@ -509,10 +498,13 @@ export function useLinkProps<
 
 export interface LinkComponent<TProps extends Record<string, any> = {}> {
   <
-    TFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+    TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+    TFrom extends RoutePaths<TRouteTree> = '/',
     TTo extends string = '',
+    TMaskFrom extends RoutePaths<TRouteTree> = '/',
+    TMaskTo extends string = '',
   >(
-    props: MakeLinkOptions<TFrom, TTo> &
+    props: MakeLinkOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo> &
       TProps &
       React.RefAttributes<HTMLAnchorElement>,
   ): ReactNode
@@ -538,9 +530,12 @@ export const Link: LinkComponent = React.forwardRef((props: any, ref) => {
 }) as any
 
 export function Navigate<
-  TFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
   TTo extends string = '',
->(props: NavigateOptions<RegisteredRouter['routeTree'], TFrom, TTo>): null {
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+>(props: NavigateOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo>): null {
   const router = useRouter()
 
   React.useLayoutEffect(() => {
@@ -604,11 +599,30 @@ function Matches() {
     },
   })
 
+  const locationKey = useRouterState({
+    select: (d) => d.resolvedLocation.state?.key,
+  })
+
+  const route = router.getRoute(rootRouteId)
+
+  const errorComponent = React.useCallback(
+    (props: any) => {
+      return React.createElement(ErrorComponent, {
+        ...props,
+        useMatch: route.useMatch,
+        useRouteContext: route.useRouteContext,
+        useSearch: route.useSearch,
+        useParams: route.useParams,
+      })
+    },
+    [route],
+  )
+
   return (
     <matchIdsContext.Provider value={[undefined!, ...matchIds]}>
       <CatchBoundary
-        errorComponent={ErrorComponent}
-        route={router.getRoute(rootRouteId)}
+        resetKey={locationKey}
+        errorComponent={errorComponent}
         onCatch={() => {
           warning(
             false,
@@ -654,12 +668,10 @@ type StrictOrFrom<TFrom> =
     }
 
 export function useMatch<
-  TFrom extends RouteIds<RegisteredRouter['routeTree']>,
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RouteIds<TRouteTree> = RouteIds<TRouteTree>,
   TStrict extends boolean = true,
-  TRouteMatchState = RouteMatch<
-    RegisteredRouter['routeTree'],
-    RouteById<RegisteredRouter['routeTree'], TFrom>
-  >,
+  TRouteMatchState = RouteMatch<TRouteTree, TFrom>,
   TSelected = TRouteMatchState,
 >(
   opts: StrictOrFrom<TFrom> & {
@@ -715,20 +727,22 @@ export function useMatch<
   return matchSelection as any
 }
 
-export type RouteFromIdOrRoute<T> = T extends ParseRoute<
-  RegisteredRouter['routeTree']
->
+export type RouteFromIdOrRoute<
+  T,
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+> = T extends ParseRoute<TRouteTree>
   ? T
-  : T extends RouteIds<RegisteredRouter['routeTree']>
-  ? RoutesById<RegisteredRouter['routeTree']>[T]
+  : T extends RouteIds<TRouteTree>
+  ? RoutesById<TRouteTree>[T]
   : T extends string
-  ? RouteIds<RegisteredRouter['routeTree']>
+  ? RouteIds<TRouteTree>
   : never
 
 export function useLoader<
-  TFrom extends RouteIds<RegisteredRouter['routeTree']>,
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RouteIds<TRouteTree> = RouteIds<TRouteTree>,
   TStrict extends boolean = true,
-  TLoader = RouteById<RegisteredRouter['routeTree'], TFrom>['types']['loader'],
+  TLoader = RouteById<TRouteTree, TFrom>['types']['loader'],
   TSelected = TLoader,
 >(
   opts: StrictOrFrom<TFrom> & {
@@ -745,12 +759,10 @@ export function useLoader<
 }
 
 export function useRouterContext<
-  TFrom extends RouteIds<RegisteredRouter['routeTree']>,
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RouteIds<TRouteTree> = RouteIds<TRouteTree>,
   TStrict extends boolean = true,
-  TContext = RouteById<
-    RegisteredRouter['routeTree'],
-    TFrom
-  >['types']['context'],
+  TContext = RouteById<TRouteTree, TFrom>['types']['context'],
   TSelected = TContext,
 >(
   opts: StrictOrFrom<TFrom> & {
@@ -765,12 +777,10 @@ export function useRouterContext<
 }
 
 export function useRouteContext<
-  TFrom extends RouteIds<RegisteredRouter['routeTree']>,
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RouteIds<TRouteTree> = RouteIds<TRouteTree>,
   TStrict extends boolean = true,
-  TRouteContext = RouteById<
-    RegisteredRouter['routeTree'],
-    TFrom
-  >['types']['routeContext'],
+  TRouteContext = RouteById<TRouteTree, TFrom>['types']['context'],
   TSelected = TRouteContext,
 >(
   opts: StrictOrFrom<TFrom> & {
@@ -781,18 +791,16 @@ export function useRouteContext<
     ...(opts as any),
     select: (match: RouteMatch) =>
       opts?.select
-        ? opts.select(match.routeContext as TRouteContext)
-        : match.routeContext,
+        ? opts.select(match.context as TRouteContext)
+        : match.context,
   })
 }
 
 export function useSearch<
-  TFrom extends RouteIds<RegisteredRouter['routeTree']>,
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RouteIds<TRouteTree> = RouteIds<TRouteTree>,
   TStrict extends boolean = true,
-  TSearch = RouteById<
-    RegisteredRouter['routeTree'],
-    TFrom
-  >['types']['fullSearchSchema'],
+  TSearch = RouteById<TRouteTree, TFrom>['types']['fullSearchSchema'],
   TSelected = TSearch,
 >(
   opts: StrictOrFrom<TFrom> & {
@@ -808,9 +816,10 @@ export function useSearch<
 }
 
 export function useParams<
-  TFrom extends RouteIds<RegisteredRouter['routeTree']> = '/',
-  TDefaultSelected = AllParams<RegisteredRouter['routeTree']> &
-    RouteById<RegisteredRouter['routeTree'], TFrom>['types']['allParams'],
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RouteIds<TRouteTree> = RouteIds<TRouteTree>,
+  TDefaultSelected = AllParams<TRouteTree> &
+    RouteById<TRouteTree, TFrom>['types']['allParams'],
   TSelected = TDefaultSelected,
 >(
   opts: StrictOrFrom<TFrom> & {
@@ -826,15 +835,18 @@ export function useParams<
 }
 
 export function useNavigate<
-  TDefaultFrom extends RoutePaths<RegisteredRouter['routeTree']> = '/',
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TDefaultFrom extends RoutePaths<TRouteTree> = '/',
 >(defaultOpts?: { from?: TDefaultFrom }) {
   const router = useRouter()
   return React.useCallback(
     <
-      TFrom extends RoutePaths<RegisteredRouter['routeTree']> = TDefaultFrom,
+      TFrom extends RoutePaths<TRouteTree> = TDefaultFrom,
       TTo extends string = '',
+      TMaskFrom extends RoutePaths<TRouteTree> = '/',
+      TMaskTo extends string = '',
     >(
-      opts?: NavigateOptions<RegisteredRouter['routeTree'], TFrom, TTo>,
+      opts?: NavigateOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo>,
     ) => {
       return router.navigate({ ...defaultOpts, ...(opts as any) })
     },
@@ -842,13 +854,27 @@ export function useNavigate<
   )
 }
 
-export function useMatchRoute() {
+export function useMatchRoute<
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+>() {
   const router = useRouter()
 
   return React.useCallback(
-    <TFrom extends string = '/', TTo extends string = ''>(
-      opts: MakeUseMatchRouteOptions<TFrom, TTo>,
-    ) => {
+    <
+      TFrom extends RoutePaths<TRouteTree> = '/',
+      TTo extends string = '',
+      TMaskFrom extends RoutePaths<TRouteTree> = '/',
+      TMaskTo extends string = '',
+      TResolved extends string = ResolveRelativePath<TFrom, NoInfer<TTo>>,
+    >(
+      opts: MakeUseMatchRouteOptions<
+        TRouteTree,
+        TFrom,
+        TTo,
+        TMaskFrom,
+        TMaskTo
+      >,
+    ): false | RouteById<TRouteTree, TResolved>['types']['allParams'] => {
       const { pending, caseSensitive, ...rest } = opts
 
       return router.matchRoute(rest as any, {
@@ -860,11 +886,17 @@ export function useMatchRoute() {
   )
 }
 
-export function MatchRoute<TFrom extends string = '/', TTo extends string = ''>(
-  props: MakeMatchRouteOptions<TFrom, TTo>,
+export function MatchRoute<
+  TRouteTree extends AnyRoute = RegisteredRouter['routeTree'],
+  TFrom extends RoutePaths<TRouteTree> = '/',
+  TTo extends string = '',
+  TMaskFrom extends RoutePaths<TRouteTree> = '/',
+  TMaskTo extends string = '',
+>(
+  props: MakeMatchRouteOptions<TRouteTree, TFrom, TTo, TMaskFrom, TMaskTo>,
 ): any {
   const matchRoute = useMatchRoute()
-  const params = matchRoute(props)
+  const params = matchRoute(props as any)
 
   if (typeof props.children === 'function') {
     return (props.children as any)(params)
@@ -890,12 +922,15 @@ function Match({ matchIds }: { matchIds: string[] }) {
   const matchId = matchIds[0]!
   const routeId = router.getRouteMatch(matchId)!.routeId
   const route = router.getRoute(routeId)
+  const locationKey = useRouterState({
+    select: (s) => s.resolvedLocation.state?.key,
+  })
 
   const PendingComponent = (route.options.pendingComponent ??
     router.options.defaultPendingComponent ??
     defaultPending) as any
 
-  const errorComponent =
+  const routeErrorComponent =
     route.options.errorComponent ??
     router.options.defaultErrorComponent ??
     ErrorComponent
@@ -905,23 +940,36 @@ function Match({ matchIds }: { matchIds: string[] }) {
       ? React.Suspense
       : SafeFragment
 
-  const ResolvedCatchBoundary = !!errorComponent ? CatchBoundary : SafeFragment
+  const ResolvedCatchBoundary = !!routeErrorComponent
+    ? CatchBoundary
+    : SafeFragment
+
+  const errorComponent = React.useCallback(
+    (props: any) => {
+      return React.createElement(routeErrorComponent, {
+        ...props,
+        useMatch: route.useMatch,
+        useRouteContext: route.useRouteContext,
+        useSearch: route.useSearch,
+        useParams: route.useParams,
+      })
+    },
+    [route],
+  )
 
   return (
     <matchIdsContext.Provider value={matchIds}>
       <ResolvedSuspenseBoundary
         fallback={React.createElement(PendingComponent, {
           useMatch: route.useMatch,
-          useContext: route.useContext,
           useRouteContext: route.useRouteContext,
           useSearch: route.useSearch,
           useParams: route.useParams,
         })}
       >
         <ResolvedCatchBoundary
-          key={route.id}
+          resetKey={locationKey}
           errorComponent={errorComponent}
-          route={route}
           onCatch={() => {
             warning(false, `Error in route match: ${matchId}`)
           }}
@@ -959,7 +1007,6 @@ function MatchInner({
     return React.createElement(PendingComponent, {
       useLoader: route.useLoader,
       useMatch: route.useMatch,
-      useContext: route.useContext,
       useRouteContext: route.useRouteContext,
       useSearch: route.useSearch,
       useParams: route.useParams,
@@ -973,7 +1020,6 @@ function MatchInner({
       return React.createElement(comp, {
         useLoader: route.useLoader,
         useMatch: route.useMatch,
-        useContext: route.useContext as any,
         useRouteContext: route.useRouteContext as any,
         useSearch: route.useSearch,
         useParams: route.useParams as any,
@@ -1028,80 +1074,58 @@ export function useHydrate() {
 // there has to be a better way to reset error boundaries when the
 // router's location key changes.
 
-class CatchBoundary extends React.Component<{
+export function CatchBoundary(props: {
+  resetKey: string
   children: any
-  errorComponent: any
-  route: AnyRoute
-  onCatch: (error: any, info: any) => void
-}> {
-  state = {
-    error: false,
-    info: undefined,
-  }
-  componentDidCatch(error: any, info: any) {
-    this.props.onCatch(error, info)
-    this.setState({
-      error,
-      info,
-    })
-  }
-  render() {
-    return (
-      <CatchBoundaryInner
-        {...this.props}
-        errorState={this.state}
-        reset={() => this.setState({})}
-      />
-    )
-  }
+  errorComponent?: any
+  onCatch: (error: any) => void
+}) {
+  const errorComponent = props.errorComponent ?? ErrorComponent
+
+  return (
+    <CatchBoundaryImpl
+      resetKey={props.resetKey}
+      onCatch={props.onCatch}
+      children={({ error }) => {
+        if (error) {
+          return React.createElement(errorComponent, {
+            error,
+          })
+        }
+
+        return props.children
+      }}
+    />
+  )
 }
 
-function CatchBoundaryInner(props: {
-  children: any
-  errorComponent: any
-  route: AnyRoute
-  errorState: { error: unknown; info: any }
-  reset: () => void
-}) {
-  const locationKey = useRouterState({
-    select: (d) => d.resolvedLocation.key,
-  })
-
-  const [activeErrorState, setActiveErrorState] = React.useState(
-    props.errorState,
-  )
-  const errorComponent = props.errorComponent ?? ErrorComponent
-  const prevKeyRef = React.useRef('' as any)
-
-  React.useEffect(() => {
-    if (activeErrorState) {
-      if (locationKey !== prevKeyRef.current) {
-        setActiveErrorState({} as any)
-      }
-    }
-
-    prevKeyRef.current = locationKey
-  }, [activeErrorState, locationKey])
-
-  React.useEffect(() => {
-    if (props.errorState.error) {
-      setActiveErrorState(props.errorState)
-    }
-    // props.reset()
-  }, [props.errorState.error])
-
-  if (props.errorState.error && activeErrorState.error) {
-    return React.createElement(errorComponent, {
-      ...activeErrorState,
-      useMatch: props.route.useMatch,
-      useContext: props.route.useContext,
-      useRouteContext: props.route.useRouteContext,
-      useSearch: props.route.useSearch,
-      useParams: props.route.useParams,
-    })
+export class CatchBoundaryImpl extends React.Component<{
+  resetKey: string
+  children: (props: { error: any; reset: () => void }) => any
+  onCatch?: (error: any) => void
+}> {
+  state = { error: null } as any
+  static getDerivedStateFromError(error: any) {
+    return { error }
   }
-
-  return props.children
+  componentDidUpdate(
+    prevProps: Readonly<{
+      resetKey: string
+      children: (props: { error: any; reset: () => void }) => any
+      onCatch?: ((error: any, info: any) => void) | undefined
+    }>,
+    prevState: any,
+  ): void {
+    if (prevState.error && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ error: null })
+    }
+  }
+  componentDidCatch(error: any) {
+    this.props.onCatch?.(error)
+  }
+  render() {
+    return this.props.children(this.state)
+  }
 }
 
 export function ErrorComponent({ error }: { error: any }) {

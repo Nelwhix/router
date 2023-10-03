@@ -158,6 +158,9 @@ const indexRoute = new Route({
 const postsRoute = new Route({
   getParentRoute: () => rootRoute,
   path: 'posts',
+  beforeLoad: () => ({
+    test: true,
+  }),
   loader: async ({ context: { loaderClient } }) => {
     await loaderClient.load({ key: 'posts' })
   },
@@ -219,11 +222,7 @@ const postRoute = new Route({
       loaderOptions,
     }
   },
-  loader: async ({
-    context: { loaderClient },
-    routeContext: { loaderOptions },
-    preload,
-  }) => {
+  loader: async ({ context: { loaderClient, loaderOptions }, preload }) => {
     await loaderClient.load({ ...loaderOptions, preload })
   },
   errorComponent: ({ error }) => {
