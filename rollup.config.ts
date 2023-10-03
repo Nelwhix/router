@@ -114,11 +114,6 @@ function esm({ input, packageDir, external, banner }: Options): RollupOptions {
     },
 
     plugins: [
-       packageDir === "packages/vue-router" && dts({
-            compilerOptions: {
-              preserveSymlinks: false,
-            },
-          }),
       // svelte({
       //   compilerOptions: {
       //     hydratable: true,

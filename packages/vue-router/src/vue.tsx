@@ -1,23 +1,11 @@
-import { inject, InjectionKey, ref, h, DefineComponent, ComponentOptionsMixin, ExtractPropTypes } from 'vue'
+import { App, inject, InjectionKey, ref, h, DefineComponent, Component, Ref } from 'vue'
 import warning from 'tiny-warning'
 import invariant from 'tiny-invariant'
-import { useStore } from '@tanstack/react-store'
+import { useStore } from '@tanstack/vue-store'
 import {
-    functionalUpdate,
-    last,
     pick,
-    MatchRouteOptions,
     RegisteredRouter,
-    RouterOptions,
-    Router,
-    RouteMatch,
-    RouteByPath,
     AnyRoute,
-    AnyRouteProps,
-    LinkOptions,
-    ToOptions,
-    ResolveRelativePath,
-    NavigateOptions,
     ResolveFullPath,
     ResolveId,
     AnySearchSchema,
@@ -27,49 +15,24 @@ import {
     AnyContext,
     UseLoaderResult,
     ResolveFullSearchSchema,
-    Route,
     RouteConstraints,
-    RoutePaths,
-    RoutesById,
-    RouteIds,
-    RouteById,
-    ParseRoute,
-    AllParams,
-    rootRouteId,
     AnyPathParams,
+    Router,
+    RouterState,
   } from '@tanstack/router-core'
 
 
 declare module '@tanstack/router-core' {
     interface RegisterRouteComponent{
-        RouteComponent: DefineComponent
+        RouteComponent: Component | DefineComponent
     }
   
-    interface RegisterErrorRouteComponent<
-      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
-      TAllParams extends AnyPathParams = AnyPathParams,
-      TRouteContext extends AnyContext = AnyContext,
-      TAllContext extends AnyContext = AnyContext,
-    > {
-      ErrorRouteComponent: RouteComponent<
-        ErrorRouteProps<TFullSearchSchema, TAllParams, TRouteContext, TAllContext>
-      >
+    interface RegisterErrorRouteComponent {
+      ErrorRouteComponent: Component | DefineComponent
     }
   
-    interface RegisterPendingRouteComponent<
-      TFullSearchSchema extends AnySearchSchema = AnySearchSchema,
-      TAllParams extends AnyPathParams = AnyPathParams,
-      TRouteContext extends AnyContext = AnyContext,
-      TAllContext extends AnyContext = AnyContext,
-    > {
-      PendingRouteComponent: RouteComponent<
-        PendingRouteProps<
-          TFullSearchSchema,
-          TAllParams,
-          TRouteContext,
-          TAllContext
-        >
-      >
+    interface RegisterPendingRouteComponent {
+      PendingRouteComponent: Component | DefineComponent
     }
   
     interface Route<
@@ -205,21 +168,12 @@ export type PendingRouteProps<
   'useLoader'
 >
 
-export type RouteComponent<TProps> = AsyncRouteComponent<TProps>
 
-export type AsyncRouteComponent<TProps> = SyncRouteComponent<TProps> & {
-    preload?: () => Promise<void>
-  }
-
-  export type SyncRouteComponent<TProps> =
-  | ((props: TProps) => HTMLElement)
-
-export const RouterProvider = Symbol() as InjectionKey<RegisteredRouter>
-export const testing = "Nelson is a nice guy"
-const matchIdsContext = Symbol() as InjectionKey<string[]>
+export const routerContextKey = Symbol() as InjectionKey<RegisteredRouter>
+export const matchIdsContextKey = Symbol() as InjectionKey<string[]>
 
 export function useRouter(): RegisteredRouter {
-    const value = inject(RouterProvider)!
+    const value = inject(routerContextKey)!
 
     warning(value, 'useRouter must be used inside a <Router> component!')
     return value
@@ -253,8 +207,13 @@ export type RouteProps<
 }
 
 export function Outlet() {
-    const matchIds = inject(matchIdsContext)!.slice(1)
-
+    const matchIds = useRouterState({
+        select: (state) => {
+          return state.renderedMatchIds
+        },
+    })
+    inject(matchIdsContextKey, [undefined!, ...matchIds])
+    
     if (!matchIds[0]) {
         return null
     }
@@ -310,15 +269,13 @@ export function ErrorComponent({ error }: { error: any }) {
     select: (state: RegisteredRouter['state']) => TSelected
   }): TSelected {
     const router = useRouter()
-    return useStore(router.__store, opts?.select as any)
+    return useStore(router.__store, opts?.select as any) as TSelected
   }
 
   function MatchInner({
-    matchId,
-    PendingComponent,
+    matchId
   }: {
     matchId: string
-    PendingComponent: any
   }): any {
     const router = useRouter()
   
@@ -335,19 +292,8 @@ export function ErrorComponent({ error }: { error: any }) {
       throw match.error
     }
   
-    if (match.status === 'pending') {
-      return h(PendingComponent, {
-        useLoader: route.useLoader,
-        useMatch: route.useMatch as any,
-        useContext: route.useContext as any,
-        useRouteContext: route.useRouteContext,
-        useSearch: route.useSearch,
-        useParams: route.useParams,
-      })
-    }
-  
     if (match.status === 'success') {
-      let comp = route.options.component ?? router.options.defaultComponent
+      let comp = <div class={".nelson .is .cool"}></div>
   
       if (comp) {
         return h(comp, {
@@ -373,18 +319,8 @@ function Match({ matchIds }: { matchIds: string[] }) {
     const router = useRouter()
     const matchId = matchIds[0]!
     const routeId = router.getRouteMatch(matchId)!.routeId
-    const route = router.getRoute(routeId)
-  
-    const PendingComponent = (route.options.pendingComponent ??
-      router.options.defaultPendingComponent ??
-      defaultPending) as any
-  
-    const errorComponent =
-      route.options.errorComponent ??
-      router.options.defaultErrorComponent ??
-      ErrorComponent
   
     return (
-        <MatchInner matchId={matchId} PendingComponent={PendingComponent} />
+        <MatchInner matchId={matchId}  />
     )
   }
